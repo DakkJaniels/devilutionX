@@ -8,13 +8,14 @@ namespace devilution {
 extern bool TestPlayerDoGotHit(int pnum);
 }
 
+
 int RunBlockTest(int frames, ItemSpecialEffect flags)
 {
 	int pnum = 0;
 	auto &player = Players[pnum];
 
 	player._pHFrames = frames;
-	player._pIFlags = flags;
+	player._pIFlags = static_cast<ItemSpecialEffect>(flags);
 	StartPlrHit(pnum, 5, false);
 
 	int i = 1;
@@ -27,6 +28,7 @@ int RunBlockTest(int frames, ItemSpecialEffect flags)
 
 	return i;
 }
+
 
 constexpr ItemSpecialEffect Normal = ItemSpecialEffect::None;
 constexpr ItemSpecialEffect Balance = ItemSpecialEffect::FastHitRecovery;
@@ -96,7 +98,7 @@ static void AssertPlayer(Player &player)
 	ASSERT_EQ(CountItems(player.InvBody, NUM_INVLOC), 1);
 	ASSERT_EQ(CountItems(player.InvList, NUM_INV_GRID_ELEM), 1);
 	ASSERT_EQ(CountItems(player.SpdList, MAXBELTITEMS), 2);
-	ASSERT_EQ(CountItems(&player.HoldItem, 1), 1);
+	ASSERT_EQ(CountItems(&player.HoldItem, 1), 0);
 
 	ASSERT_EQ(player.position.tile.x, 0);
 	ASSERT_EQ(player.position.tile.y, 0);
@@ -147,7 +149,7 @@ static void AssertPlayer(Player &player)
 	ASSERT_EQ(player._pSBkSpell, 0);
 	ASSERT_EQ(player._pAblSpells, 134217728);
 	ASSERT_EQ(player._pScrlSpells, 0);
-	ASSERT_EQ(player._pSpellFlags, 0);
+	ASSERT_EQ(player._pSpellFlags, SpellFlag::None);
 	ASSERT_EQ(player._pBlockFlag, 0);
 	ASSERT_EQ(player._pLightRad, 10);
 	ASSERT_EQ(player._pDamageMod, 0);
