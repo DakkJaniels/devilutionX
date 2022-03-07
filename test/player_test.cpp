@@ -8,13 +8,13 @@ namespace devilution {
 extern bool TestPlayerDoGotHit(int pnum);
 }
 
-int RunBlockTest(int frames, uint32_t flags)
+int RunBlockTest(int frames, ItemSpecialEffect flags)
 {
 	int pnum = 0;
 	auto &player = Players[pnum];
 
 	player._pHFrames = frames;
-	player._pIFlags = static_cast<ItemSpecialEffect>(flags);
+	player._pIFlags = flags;
 	StartPlrHit(pnum, 5, false);
 
 	int i = 1;
@@ -28,56 +28,64 @@ int RunBlockTest(int frames, uint32_t flags)
 	return i;
 }
 
-#define NORM 0
-#define BAL static_cast<uint32_t>(ItemSpecialEffect::FastHitRecovery)
-#define STA static_cast<uint32_t>(ItemSpecialEffect::FasterHitRecovery)
-#define HAR static_cast<uint32_t>(ItemSpecialEffect::FastestHitRecovery)
-#define BALSTA static_cast<uint32_t>(ItemSpecialEffect::FastHitRecovery | ItemSpecialEffect::FasterHitRecovery)
-#define BALHAR static_cast<uint32_t>(ItemSpecialEffect::FastHitRecovery | ItemSpecialEffect::FastestHitRecovery)
-#define STAHAR static_cast<uint32_t>(ItemSpecialEffect::FasterHitRecovery | ItemSpecialEffect::FastestHitRecovery)
-#define ZEN static_cast<uint32_t>(ItemSpecialEffect::FastHitRecovery | ItemSpecialEffect::FasterHitRecovery | ItemSpecialEffect::FastestHitRecovery)
-#define WAR 6
-#define ROU 7
-#define SRC 8
+constexpr ItemSpecialEffect Normal = ItemSpecialEffect::None;
+constexpr ItemSpecialEffect Balance = ItemSpecialEffect::FastHitRecovery;
+constexpr ItemSpecialEffect Stability = ItemSpecialEffect::FasterHitRecovery;
+constexpr ItemSpecialEffect Harmony = ItemSpecialEffect::FastestHitRecovery;
+constexpr ItemSpecialEffect BalanceStability = Balance | Stability;
+constexpr ItemSpecialEffect BalanceHarmony = Balance | Harmony;
+constexpr ItemSpecialEffect StabilityHarmony = Stability | Harmony;
+constexpr ItemSpecialEffect Zen = Balance | Stability | Harmony;
 
-int BlockData[][3] = {
-	{ 6, WAR, NORM },
-	{ 7, ROU, NORM },
-	{ 8, SRC, NORM },
+constexpr int Warrior = 6;
+constexpr int Rogue = 7;
+constexpr int Sorcerer = 8;
 
-	{ 5, WAR, BAL },
-	{ 6, ROU, BAL },
-	{ 7, SRC, BAL },
 
-	{ 4, WAR, STA },
-	{ 5, ROU, STA },
-	{ 6, SRC, STA },
+struct BlockTestCase {
+	int expectedRecoveryFrame;
+	int maxRecoveryFrame;
+	ItemSpecialEffect itemFlags;
+};
 
-	{ 3, WAR, HAR },
-	{ 4, ROU, HAR },
-	{ 5, SRC, HAR },
+BlockTestCase BlockData[] = {
+	{ 6, Warrior, Normal },
+	{ 7, Rogue, Normal },
+	{ 8, Sorcerer, Normal },
 
-	{ 4, WAR, BALSTA },
-	{ 5, ROU, BALSTA },
-	{ 6, SRC, BALSTA },
+	{ 5, Warrior, Balance },
+	{ 6, Rogue, Balance },
+	{ 7, Sorcerer, Balance },
 
-	{ 3, WAR, BALHAR },
-	{ 4, ROU, BALHAR },
-	{ 5, SRC, BALHAR },
+	{ 4, Warrior, Stability },
+	{ 5, Rogue, Stability },
+	{ 6, Sorcerer, Stability },
 
-	{ 3, WAR, STAHAR },
-	{ 4, ROU, STAHAR },
-	{ 5, SRC, STAHAR },
+	{ 3, Warrior, Harmony },
+	{ 4, Rogue, Harmony },
+	{ 5, Sorcerer, Harmony },
 
-	{ 2, WAR, ZEN },
-	{ 3, ROU, ZEN },
-	{ 4, SRC, ZEN },
+	{ 4, Warrior, BalanceStability },
+	{ 5, Rogue, BalanceStability },
+	{ 6, Sorcerer, BalanceStability },
+
+	{ 3, Warrior, BalanceHarmony },
+	{ 4, Rogue, BalanceHarmony },
+	{ 5, Sorcerer, BalanceHarmony },
+
+	{ 3, Warrior, StabilityHarmony },
+	{ 4, Rogue, StabilityHarmony },
+	{ 5, Sorcerer, StabilityHarmony },
+
+	{ 2, Warrior, Zen },
+	{ 3, Rogue, Zen },
+	{ 4, Sorcerer, Zen },
 };
 
 TEST(Player, PM_DoGotHit)
 {
 	for (size_t i = 0; i < sizeof(BlockData) / sizeof(*BlockData); i++) {
-		EXPECT_EQ(BlockData[i][0], RunBlockTest(BlockData[i][1], BlockData[i][2]));
+		EXPECT_EQ(BlockData[i].expectedRecoveryFrame, RunBlockTest(BlockData[i].maxRecoveryFrame, BlockData[i].itemFlags));
 	}
 }
 
