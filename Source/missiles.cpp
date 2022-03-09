@@ -203,11 +203,11 @@ bool MonsterMHit(int pnum, int m, int mindam, int maxdam, int dist, missile_id t
 	uint8_t mor = monster.mMagicRes;
 	missile_resistance mir = MissilesData[t].mResist;
 
-	if (((mor & IMMUNE_MAGIC) != 0 && mir == MISR_MAGIC)
-	    || ((mor & IMMUNE_FIRE) != 0 && mir == MISR_FIRE)
-	    || ((mor & IMMUNE_LIGHTNING) != 0 && mir == MISR_LIGHTNING)
-	    || ((mor & IMMUNE_ACID) != 0 && mir == MISR_ACID))
-		return false;
+	//if (((mor & IMMUNE_MAGIC) != 0 && mir == MISR_MAGIC)
+	//    || ((mor & IMMUNE_FIRE) != 0 && mir == MISR_FIRE)
+	//    || ((mor & IMMUNE_LIGHTNING) != 0 && mir == MISR_LIGHTNING)
+	//    || ((mor & IMMUNE_ACID) != 0 && mir == MISR_ACID))
+	//	return false;
 
 	if (((mor & RESIST_MAGIC) != 0 && mir == MISR_MAGIC)
 	    || ((mor & RESIST_FIRE) != 0 && mir == MISR_FIRE)
@@ -267,8 +267,11 @@ bool MonsterMHit(int pnum, int m, int mindam, int maxdam, int dist, missile_id t
 
 	if (!shift)
 		dam <<= 6;
-	if (resist)
-		dam >>= 2;
+	/*if (resist)
+		dam >>= 2;*/
+
+	if (t == MIS_FIREBALL)
+		SDL_Log("Fireball Damage is: %d", dam>>6);
 
 	if (pnum == MyPlayerId)
 		monster._mhitpoints -= dam;
@@ -1894,7 +1897,7 @@ void AddFireball(Missile &missile, const AddMissileParameter &parameter)
 	if (missile._micaster == TARGET_MONSTERS) {
 		sp += std::min(missile._mispllvl * 2, 34);
 
-		int dmg = 2 * (Players[missile._misource]._pLevel + GenerateRndSum(10, 2)) + 4;
+		int dmg = 2 * (Players[missile._misource]._pLevel + 18 /*GenerateRndSum(10, 2)*/ ) + 4;
 		missile._midam = ScaleSpellEffect(dmg, missile._mispllvl);
 
 		UseMana(missile._misource, SPL_FIREBALL);

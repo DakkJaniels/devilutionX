@@ -4643,9 +4643,10 @@ void PrintMonstHistory(int mt)
 	}
 
 	AddPanelString(tempstr);
-	if (MonsterKillCounts[mt] >= 30) {
+	if (MonsterKillCounts[mt] >= 0) {
 		int minHP = MonstersData[mt].mMinHP;
 		int maxHP = MonstersData[mt].mMaxHP;
+		int actualHP = Monsters[pcursmonst]._mhitpoints >> 6;
 		if (!gbIsHellfire && mt == MT_DIABLO) {
 			minHP -= 2000;
 			maxHP -= 2000;
@@ -4672,7 +4673,7 @@ void PrintMonstHistory(int mt)
 			minHP = 4 * minHP + hpBonusHell;
 			maxHP = 4 * maxHP + hpBonusHell;
 		}
-		strcpy(tempstr, fmt::format(_("Hit Points: {:d}-{:d}"), minHP, maxHP).c_str());
+		strcpy(tempstr, fmt::format(_("Actual Hit Points: {:d}"), actualHP).c_str());
 		AddPanelString(tempstr);
 	}
 	if (MonsterKillCounts[mt] >= 15) {
