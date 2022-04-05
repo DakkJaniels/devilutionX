@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include "stores.h"
+#include "items.h"
+#include "engine/random.hpp"
 
 using namespace devilution;
 
@@ -41,34 +43,43 @@ TEST(Stores, AddStoreHoldRepair_magic)
 
 TEST(Stores, AddStoreHoldRepair_normal)
 {
-	Item *item;
+	//Item *item;
 
-	item = &storehold[0];
+	//item = &storehold[0];
 
-	item->_iMaxDur = 20;
-	item->_iDurability = item->_iMaxDur;
-	item->_iMagical = ITEM_QUALITY_NORMAL;
-	item->_iIdentified = true;
-	item->_ivalue = 2000;
-	item->_iIvalue = item->_ivalue;
+	//item->_iMaxDur = 20;
+	//item->_iDurability = item->_iMaxDur;
+	//item->_iMagical = ITEM_QUALITY_NORMAL;
+	//item->_iIdentified = true;
+	//item->_ivalue = 2000;
+	//item->_iIvalue = item->_ivalue;
 
-	for (int i = 1; i < item->_iMaxDur; i++) {
-		item->_ivalue = 2000;
-		item->_iIvalue = item->_ivalue;
-		item->_iDurability = i;
-		storenumh = 0;
-		AddStoreHoldRepair(item, 0);
-		EXPECT_EQ(1, storenumh);
-		EXPECT_EQ(50 * (item->_iMaxDur - i), item->_ivalue);
+	//for (int i = 1; i < item->_iMaxDur; i++) {
+	//	item->_ivalue = 2000;
+	//	item->_iIvalue = item->_ivalue;
+	//	item->_iDurability = i;
+	//	storenumh = 0;
+	//	AddStoreHoldRepair(item, 0);
+	//	EXPECT_EQ(1, storenumh);
+	//	EXPECT_EQ(50 * (item->_iMaxDur - i), item->_ivalue);
+	//}
+
+	//item->_iDurability = 19;
+	//storenumh = 0;
+	//item->_ivalue = 10; // less than 1 per dur
+	//item->_iIvalue = item->_ivalue;
+	//AddStoreHoldRepair(item, 0);
+	//EXPECT_EQ(1, storenumh);
+	//EXPECT_EQ(1, item->_ivalue);
+	//EXPECT_EQ(1, item->_iIvalue);
+	srand(time(NULL));
+	SetRndSeed(rand());
+	int sum = 0;
+	for (int i = 0; i < 100; i++) {
+		sum += StoreTest();
 	}
+	float averageRun = sum / 100;
+	SDL_Log("Average %0.1f runs per bow", averageRun);
 
-	item->_iDurability = 19;
-	storenumh = 0;
-	item->_ivalue = 10; // less than 1 per dur
-	item->_iIvalue = item->_ivalue;
-	AddStoreHoldRepair(item, 0);
-	EXPECT_EQ(1, storenumh);
-	EXPECT_EQ(1, item->_ivalue);
-	EXPECT_EQ(1, item->_iIvalue);
 }
 } // namespace
