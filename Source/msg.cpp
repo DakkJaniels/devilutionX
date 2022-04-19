@@ -1484,6 +1484,19 @@ DWORD OnPlayerDamage(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
+DWORD OnPlayerDamageHack(const TCmd *pCmd, Player &player)
+{
+	const auto &message = *reinterpret_cast<const TCmdDamage *>(pCmd);
+
+	if (message.bPlr == MyPlayerId && currlevel != 0 && gbBufferMsgs != 1) {
+		if (currlevel == player.plrlevel && message.dwDam <= 192000 && Players[message.bPlr]._pHitPoints >> 6 > 0) {
+			ApplyPlrDamage(message.bPlr, 0, 0, message.dwDam, 0);
+		}
+	}
+
+	return sizeof(message);
+}
+
 DWORD OnOpenDoor(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
@@ -2642,6 +2655,19 @@ void NetSendCmdDamage(bool bHiPri, uint8_t bPlr, uint32_t dwDam)
 		NetSendLoPri(MyPlayerId, (byte *)&cmd, sizeof(cmd));
 }
 
+void NetSendCmdDamageHack(bool bHiPri, uint8_t bPlr, uint32_t dwDam)
+{
+	TCmdDamage cmd;
+
+	cmd.bCmd = CMD_PLRDAMAGE;
+	cmd.bPlr = bPlr;
+	cmd.dwDam = dwDam;
+	if (bHiPri)
+		NetSendHiPri(bPlr, (byte *)&cmd, sizeof(cmd));
+	else
+		NetSendLoPri(bPlr, (byte *)&cmd, sizeof(cmd));
+}
+
 void NetSendCmdMonDmg(bool bHiPri, uint16_t wMon, uint32_t dwDam)
 {
 	TCmdMonDamage cmd;
@@ -2770,7 +2796,7 @@ uint32_t ParseCmd(int pnum, const TCmd *pCmd)
 	case CMD_PLRDEAD:
 		return OnPlayerDeath(pCmd, pnum);
 	case CMD_PLRDAMAGE:
-		return OnPlayerDamage(pCmd, player);
+		return OnPlayerDamageHack(pCmd, player);
 	case CMD_OPENDOOR:
 		return OnOpenDoor(pCmd, pnum);
 	case CMD_CLOSEDOOR:

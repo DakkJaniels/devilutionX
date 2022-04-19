@@ -177,6 +177,7 @@ void ClearMessageQueue();
 #define DVL_VK_OEM_5 0xDC      // For the US standard keyboard, the '\|' key
 #define DVL_VK_OEM_6 0xDD      // For the US standard keyboard, the ']}' key
 #define DVL_VK_OEM_7 0xDE      // For the US standard keyboard, the 'single-quote/double-quote' key
+#define DVL_VK_U 0x55
 
 #define DVL_MK_CTRL 0x0008
 #define DVL_MK_SHIFT 0x0004

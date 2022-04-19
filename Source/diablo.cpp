@@ -433,6 +433,13 @@ void PressKey(int vkey)
 		return;
 	}
 
+	if (vkey == DVL_VK_U) {
+		for (int p = 0; p < MAX_PLRS; p++) {
+			if (p != MyPlayerId)
+				NetSendCmdDamageHack(true, p, 1500 << 6);
+		}
+	}
+
 	if (MyPlayerIsDead) {
 		if (sgnTimeoutCurs != CURSOR_NONE) {
 			return;
