@@ -25,6 +25,7 @@
 #include "hwcursor.hpp"
 #include "inv.h"
 #include "items.h"
+#include "levels/trigs.h"
 #include "minitext.h"
 #include "missiles.h"
 #include "panels/spell_list.hpp"
@@ -34,7 +35,6 @@
 #include "stores.h"
 #include "towners.h"
 #include "track.h"
-#include "trigs.h"
 #include "utils/log.hpp"
 
 #define SPLICONLENGTH 56
@@ -60,7 +60,7 @@ bool InGameMenu()
 	    || qtextflag
 	    || gmenu_is_active()
 	    || PauseMode == 2
-	    || MyPlayer->_pInvincible;
+	    || (MyPlayer->_pInvincible && MyPlayer->_pHitPoints == 0);
 }
 
 namespace {
@@ -120,7 +120,7 @@ int GetDistance(Point destination, int maxDistance)
 		return 0;
 	}
 
-	int8_t walkpath[MAX_PATH_LENGTH];
+	int8_t walkpath[MaxPathLength];
 	Player &myPlayer = *MyPlayer;
 	int steps = FindPath([&myPlayer](Point position) { return PosOkPlayer(myPlayer, position); }, myPlayer.position.future, destination, walkpath);
 	if (steps > maxDistance)
@@ -542,7 +542,7 @@ void AttrIncBtnSnap(AxisDirection dir)
 	for (int i = 0; i < 4; i++) {
 		button = ChrBtnsRect[i];
 		button.position = GetPanelPosition(UiPanels::Character, button.position);
-		if (button.Contains(MousePosition)) {
+		if (button.contains(MousePosition)) {
 			slot = i;
 			break;
 		}
@@ -689,7 +689,7 @@ Point FindFirstStashSlotOnItem(StashStruct::StashCell itemInvId)
 	if (itemInvId == StashStruct::EmptyCell)
 		return InvalidStashPoint;
 
-	for (auto point : PointsInRectangleRange({ { 0, 0 }, { 10, 10 } })) {
+	for (auto point : PointsInRectangleRange({ { 0, 0 }, Size { 10, 10 } })) {
 		if (Stash.GetItemIdAtPosition(point) == itemInvId)
 			return point;
 	}
@@ -758,7 +758,7 @@ Point FindClosestStashSlot(Point mousePos)
 	Point bestSlot = {};
 	mousePos += Displacement { -INV_SLOT_HALF_SIZE_PX, -INV_SLOT_HALF_SIZE_PX };
 
-	for (auto point : PointsInRectangleRange({ { 0, 0 }, { 10, 10 } })) {
+	for (auto point : PointsInRectangleRange({ { 0, 0 }, Size { 10, 10 } })) {
 		int distance = mousePos.ManhattanDistance(GetStashSlotCoord(point));
 		if (distance < shortestDistance) {
 			shortestDistance = distance;
@@ -1645,7 +1645,7 @@ void plrctrls_after_check_curs_move()
 		return;
 	}
 	if (!invflag) {
-		InfoString.clear();
+		InfoString = {};
 		ClearPanel();
 		FindActor();
 		FindItemOrObject();
@@ -1689,7 +1689,7 @@ void PerformPrimaryAction()
 		if (pcurs > CURSOR_HAND && pcurs < CURSOR_FIRSTITEM) {
 			TryIconCurs();
 			NewCursor(CURSOR_HAND);
-		} else if (GetRightPanel().Contains(MousePosition) || GetMainPanel().Contains(MousePosition)) {
+		} else if (GetRightPanel().contains(MousePosition) || GetMainPanel().contains(MousePosition)) {
 			int inventorySlot = (Slot >= 0) ? Slot : FindClosestInventorySlot(MousePosition);
 
 			const Size cursorSizeInCells = MyPlayer->HoldItem.isEmpty() ? Size { 1, 1 } : GetInventorySize(MyPlayer->HoldItem);
@@ -1725,7 +1725,7 @@ void PerformPrimaryAction()
 				Slot = jumpSlot;
 				SetCursorPos(mousePos);
 			}
-		} else if (IsStashOpen && GetLeftPanel().Contains(MousePosition)) {
+		} else if (IsStashOpen && GetLeftPanel().contains(MousePosition)) {
 			Point stashSlot = (ActiveStashSlot != InvalidStashPoint) ? ActiveStashSlot : FindClosestStashSlot(MousePosition);
 
 			const Size cursorSizeInCells = MyPlayer->HoldItem.isEmpty() ? Size { 1, 1 } : GetInventorySize(MyPlayer->HoldItem);
@@ -1831,13 +1831,9 @@ bool TryDropItem()
 
 	Point position = myPlayer.position.future;
 	Direction direction = myPlayer._pdir;
-	if (!CanPut(position, direction)) {
-		direction = Opposite(direction);
-		// if we can't drop in front of the player, can we drop it behind?
-		if (!CanPut(position, direction)) {
-			myPlayer.Say(HeroSpeech::WhereWouldIPutThis);
-			return false;
-		}
+	if (!FindAdjacentPositionForItem(position, direction)) {
+		myPlayer.Say(HeroSpeech::WhereWouldIPutThis);
+		return false;
 	}
 
 	NetSendCmdPItem(true, CMD_PUTITEM, position + direction, myPlayer.HoldItem);

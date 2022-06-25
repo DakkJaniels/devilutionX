@@ -1,9 +1,9 @@
 #include "panels/spell_icons.hpp"
 
 #include "engine/load_cel.hpp"
+#include "engine/palette.h"
 #include "engine/render/cel_render.hpp"
 #include "init.h"
-#include "palette.h"
 #include "utils/stdcompat/optional.hpp"
 
 namespace devilution {
@@ -89,7 +89,7 @@ void DrawSpellCel(const Surface &out, Point position, int nCel)
 
 void DrawSpellCel(const Surface &out, Point position, const OwnedCelSprite &sprite, int nCel)
 {
-	CelDrawLightTo(out, position, sprite, nCel, SplTransTbl);
+	CelDrawLightTo(out, position, CelSprite { sprite }, nCel, SplTransTbl);
 }
 
 void SetSpellTrans(spell_type t)

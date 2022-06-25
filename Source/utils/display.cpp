@@ -20,9 +20,10 @@
 #include "controls/devices/kbcontroller.h"
 #include "controls/game_controls.h"
 #include "controls/touch/gamepad.h"
-#include "dx.h"
+#include "engine/dx.h"
 #include "options.h"
 #include "utils/log.hpp"
+#include "utils/sdl_geometry.h"
 #include "utils/sdl_wrap.h"
 
 #ifdef USE_SDL1
@@ -139,11 +140,10 @@ void FreeRenderer()
 
 void CalculateUIRectangle()
 {
-	constexpr int UIWidth = 640;
-	constexpr int UIHeight = 480;
+	constexpr Size UISize { 640, 480 };
 	UIRectangle = {
-		{ (gnScreenWidth - UIWidth) / 2, (gnScreenHeight - UIHeight) / 2 },
-		{ UIWidth, UIHeight }
+		{ (gnScreenWidth - UISize.width) / 2, (gnScreenHeight - UISize.height) / 2 },
+		UISize
 	};
 }
 
@@ -472,6 +472,15 @@ SDL_Surface *GetOutputSurface()
 #endif
 }
 
+bool IsDoubleBuffered()
+{
+#ifdef USE_SDL1
+	return (GetOutputSurface()->flags & SDL_DOUBLEBUF) == SDL_DOUBLEBUF;
+#else
+	return true;
+#endif
+}
+
 bool OutputRequiresScaling()
 {
 #ifdef USE_SDL1
@@ -497,7 +506,7 @@ namespace {
 
 SDLSurfaceUniquePtr CreateScaledSurface(SDL_Surface *src)
 {
-	SDL_Rect stretched_rect = { 0, 0, static_cast<Uint16>(src->w), static_cast<Uint16>(src->h) };
+	SDL_Rect stretched_rect = MakeSdlRect(0, 0, src->w, src->h);
 	ScaleOutputRect(&stretched_rect);
 	SDLSurfaceUniquePtr stretched = SDLWrap::CreateRGBSurface(
 	    SDL_SWSURFACE, stretched_rect.w, stretched_rect.h, src->format->BitsPerPixel,

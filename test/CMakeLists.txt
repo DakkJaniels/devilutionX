@@ -25,6 +25,7 @@ set(tests
   drlg_l4_test
   effects_test
   file_util_test
+  format_int_test
   inv_test
   lighting_test
   math_test
@@ -36,6 +37,7 @@ set(tests
   random_test
   scrollrt_test
   stores_test
+  utf8_test
   writehero_test
 )
 

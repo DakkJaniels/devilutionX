@@ -13,8 +13,8 @@
 #endif
 
 #include "DiabloUI/diabloui.h"
-#include "dx.h"
 #include "engine/assets.hpp"
+#include "engine/dx.h"
 #include "mpq/mpq_reader.hpp"
 #include "options.h"
 #include "pfile.h"
@@ -129,7 +129,7 @@ std::vector<std::string> GetMPQSearchPaths()
 void init_cleanup()
 {
 	if (gbIsMultiplayer && gbRunGame) {
-		pfile_write_hero(/*writeGameData=*/false, /*clearTables=*/true);
+		pfile_write_hero(/*writeGameData=*/false);
 		sfile_write_stash();
 	}
 
@@ -212,7 +212,7 @@ void LoadGameArchives()
 	hfvoice_mpq = LoadMPQ(paths, "hfvoice.mpq");
 
 	if (gbIsHellfire && (!hfmonk_mpq || !hfmusic_mpq || !hfvoice_mpq)) {
-		UiErrorOkDialog(_("Some Hellfire MPQs are missing").c_str(), _("Not all Hellfire MPQs were found.\nPlease copy all the hf*.mpq files.").c_str());
+		UiErrorOkDialog(_("Some Hellfire MPQs are missing"), _("Not all Hellfire MPQs were found.\nPlease copy all the hf*.mpq files."));
 		app_fatal(nullptr);
 	}
 }
@@ -220,7 +220,7 @@ void LoadGameArchives()
 void init_create_window()
 {
 	if (!SpawnWindow(PROJECT_NAME))
-		app_fatal("%s", _("Unable to create main window").c_str());
+		app_fatal(_("Unable to create main window"));
 	dx_init();
 	gbActive = true;
 #ifndef USE_SDL1

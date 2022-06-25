@@ -2,11 +2,6 @@
 
 #include <algorithm>
 #include <string>
-#ifdef USE_SDL1
-#include <cassert>
-#include <codecvt>
-#include <locale>
-#endif
 
 #include "DiabloUI/art_draw.h"
 #include "DiabloUI/button.h"
@@ -17,12 +12,15 @@
 #include "controls/menu_controls.h"
 #include "controls/plrctrls.h"
 #include "discord/discord.h"
-#include "dx.h"
 #include "engine/cel_sprite.hpp"
+#include "engine/dx.h"
+#include "engine/load_pcx.hpp"
 #include "engine/load_pcx_as_cel.hpp"
+#include "engine/palette.h"
+#include "engine/pcx_sprite.hpp"
 #include "engine/render/cel_render.hpp"
+#include "engine/render/pcx_render.hpp"
 #include "hwcursor.hpp"
-#include "palette.h"
 #include "utils/display.h"
 #include "utils/language.h"
 #include "utils/log.hpp"
@@ -51,8 +49,8 @@ namespace devilution {
 std::array<std::optional<OwnedCelSpriteWithFrameHeight>, 3> ArtLogos;
 std::array<std::optional<OwnedCelSpriteWithFrameHeight>, 3> ArtFocus;
 
-Art ArtBackgroundWidescreen;
-Art ArtBackground;
+std::optional<OwnedPcxSprite> ArtBackgroundWidescreen;
+std::optional<OwnedPcxSpriteSheet> ArtBackground;
 Art ArtCursor;
 Art ArtHero;
 
@@ -285,7 +283,10 @@ void UiFocusPageDown()
 
 void SelheroCatToName(const char *inBuf, char *outBuf, int cnt)
 {
-	strncat(outBuf, inBuf, cnt - strlen(outBuf));
+	size_t outLen = strlen(outBuf);
+	char *dest = outBuf + outLen;
+	size_t destCount = cnt - outLen;
+	CopyUtf8(dest, inBuf, destCount);
 }
 
 bool HandleMenuAction(MenuAction menuAction)
@@ -397,9 +398,8 @@ void UiFocusNavigation(SDL_Event *event)
 			}
 #ifdef USE_SDL1
 			if ((event->key.keysym.mod & KMOD_CTRL) == 0) {
-				Uint16 unicode = event->key.keysym.unicode;
-				std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-				std::string utf8 = convert.to_bytes(unicode);
+				std::string utf8;
+				AppendUtf8(event->key.keysym.unicode, utf8);
 				SelheroCatToName(utf8.c_str(), UiTextInput, UiTextInputLen);
 			}
 #endif
@@ -621,19 +621,25 @@ void UiDestroy()
 	UnloadUiGFX();
 }
 
-bool UiValidPlayerName(const char *name)
+bool UiValidPlayerName(string_view name)
 {
-	if (strlen(name) == 0)
+	if (name.empty())
 		return false;
 
-	if (strpbrk(name, ",<>%&\\\"?*#/:") != nullptr || strpbrk(name, " ") != nullptr)
+	// Currently only allow saving PLR_NAME_LEN bytes as a player name, so if the name is too long we'd have to truncate it.
+	// That said the input buffer is only 16 bytes long...
+	if (name.size() > PLR_NAME_LEN)
 		return false;
 
-	for (BYTE *letter = (BYTE *)name; *letter != '\0'; letter++)
-		if (*letter < 0x20 || (*letter > 0x7E && *letter < 0xC0))
-			return false;
+	if (name.find_first_of(",<>%&\\\"?*#/: ") != name.npos)
+		return false;
 
-	const char *const bannedNames[] = {
+	// Only basic latin alphabet is supported for multiplayer characters to avoid rendering issues for players who do
+	// not have fonts.mpq installed
+	if (!std::all_of(name.begin(), name.end(), IsBasicLatin))
+		return false;
+
+	string_view bannedNames[] = {
 		"gvdl",
 		"dvou",
 		"tiju",
@@ -644,13 +650,13 @@ bool UiValidPlayerName(const char *name)
 		"benjo",
 	};
 
-	char tmpname[PLR_NAME_LEN];
-	CopyUtf8(tmpname, name, sizeof(tmpname));
-	for (size_t i = 0, n = strlen(tmpname); i < n; i++)
-		tmpname[i]++;
+	std::string buffer { name };
+	for (char &character : buffer)
+		character++;
 
-	for (const auto *bannedName : bannedNames) {
-		if (strstr(tmpname, bannedName) != nullptr)
+	string_view tempName { buffer };
+	for (string_view bannedName : bannedNames) {
+		if (tempName.find(bannedName) != tempName.npos)
 			return false;
 	}
 
@@ -669,8 +675,8 @@ Sint16 GetCenterOffset(Sint16 w, Sint16 bw)
 void LoadBackgroundArt(const char *pszFile, int frames)
 {
 	SDL_Color pPal[256];
-	LoadArt(pszFile, &ArtBackground, frames, pPal);
-	if (ArtBackground.surface == nullptr)
+	ArtBackground = LoadPcxSpriteSheetAsset(pszFile, static_cast<uint16_t>(frames), /*transparentColor=*/std::nullopt, pPal);
+	if (!ArtBackground)
 		return;
 
 	LoadPalInMem(pPal);
@@ -694,20 +700,20 @@ void LoadBackgroundArt(const char *pszFile, int frames)
 void UiAddBackground(std::vector<std::unique_ptr<UiItemBase>> *vecDialog)
 {
 	int uiPositionY = GetUIRectangle().position.y;
-	if (ArtBackgroundWidescreen.surface != nullptr) {
-		SDL_Rect rectw = { 0, uiPositionY, 0, 0 };
-		vecDialog->push_back(std::make_unique<UiImage>(&ArtBackgroundWidescreen, rectw, UiFlags::AlignCenter));
+	if (ArtBackgroundWidescreen) {
+		SDL_Rect rectw = MakeSdlRect(0, uiPositionY, 0, 0);
+		vecDialog->push_back(std::make_unique<UiImagePcx>(PcxSprite { *ArtBackgroundWidescreen }, rectw, UiFlags::AlignCenter));
 	}
 
-	SDL_Rect rect = { 0, uiPositionY, 0, 0 };
-	vecDialog->push_back(std::make_unique<UiImage>(&ArtBackground, rect, UiFlags::AlignCenter));
+	SDL_Rect rect = MakeSdlRect(0, uiPositionY, 0, 0);
+	vecDialog->push_back(std::make_unique<UiImagePcx>(PcxSpriteSheet { *ArtBackground }.sprite(0), rect, UiFlags::AlignCenter));
 }
 
 void UiAddLogo(std::vector<std::unique_ptr<UiItemBase>> *vecDialog, int size, int y)
 {
-	SDL_Rect rect = { 0, (Sint16)(GetUIRectangle().position.y + y), 0, 0 };
+	SDL_Rect rect = MakeSdlRect(0, GetUIRectangle().position.y + y, 0, 0);
 	vecDialog->push_back(std::make_unique<UiImageCel>(
-	    CelSpriteWithFrameHeight { ArtLogos[size]->sprite, ArtLogos[size]->frameHeight }, rect, UiFlags::AlignCenter, /*bAnimated=*/true));
+	    CelSpriteWithFrameHeight { CelSprite { ArtLogos[size]->sprite }, ArtLogos[size]->frameHeight }, rect, UiFlags::AlignCenter, /*bAnimated=*/true));
 }
 
 void UiFadeIn()
@@ -750,7 +756,7 @@ void DrawSelector(const SDL_Rect &rect)
 		size = FOCUS_BIG;
 	else if (rect.h >= 30)
 		size = FOCUS_MED;
-	CelSpriteWithFrameHeight sprite { ArtFocus[size]->sprite, ArtFocus[size]->frameHeight };
+	CelSpriteWithFrameHeight sprite { CelSprite { ArtFocus[size]->sprite }, ArtFocus[size]->frameHeight };
 
 	// TODO FOCUS_MED appares higher than the box
 	const int y = rect.y + (rect.h - static_cast<int>(sprite.frameHeight)) / 2;
@@ -796,18 +802,14 @@ namespace {
 
 void Render(const UiText *uiText)
 {
-	Rectangle rect { { uiText->m_rect.x, uiText->m_rect.y }, { uiText->m_rect.w, uiText->m_rect.h } };
-
 	const Surface &out = Surface(DiabloUiSurface());
-	DrawString(out, uiText->GetText(), rect, uiText->GetFlags() | UiFlags::FontSizeDialog);
+	DrawString(out, uiText->GetText(), MakeRectangle(uiText->m_rect), uiText->GetFlags() | UiFlags::FontSizeDialog);
 }
 
 void Render(const UiArtText *uiArtText)
 {
-	Rectangle rect { { uiArtText->m_rect.x, uiArtText->m_rect.y }, { uiArtText->m_rect.w, uiArtText->m_rect.h } };
-
 	const Surface &out = Surface(DiabloUiSurface());
-	DrawString(out, uiArtText->GetText(), rect, uiArtText->GetFlags(), uiArtText->GetSpacing(), uiArtText->GetLineHeight());
+	DrawString(out, uiArtText->GetText(), MakeRectangle(uiArtText->m_rect), uiArtText->GetFlags(), uiArtText->GetSpacing(), uiArtText->GetLineHeight());
 }
 
 void Render(const UiImage *uiImage)
@@ -837,12 +839,30 @@ void Render(const UiImageCel *uiImage)
 	}
 }
 
+void Render(const UiImagePcx *uiImage)
+{
+	PcxSprite sprite = uiImage->GetSprite();
+	int x = uiImage->m_rect.x;
+	if (uiImage->IsCentered()) {
+		x += GetCenterOffset(sprite.width(), uiImage->m_rect.w);
+	}
+	RenderPcxSprite(Surface(DiabloUiSurface()), sprite, { x, uiImage->m_rect.y });
+}
+
+void Render(const UiImageAnimatedPcx *uiImage)
+{
+	PcxSprite sprite = uiImage->GetSprite(GetAnimationFrame(uiImage->NumFrames()));
+	int x = uiImage->m_rect.x;
+	if (uiImage->IsCentered()) {
+		x += GetCenterOffset(sprite.width(), uiImage->m_rect.w);
+	}
+	RenderPcxSprite(Surface(DiabloUiSurface()), sprite, { x, uiImage->m_rect.y });
+}
+
 void Render(const UiArtTextButton *uiButton)
 {
-	Rectangle rect { { uiButton->m_rect.x, uiButton->m_rect.y }, { uiButton->m_rect.w, uiButton->m_rect.h } };
-
 	const Surface &out = Surface(DiabloUiSurface());
-	DrawString(out, uiButton->GetText(), rect, uiButton->GetFlags());
+	DrawString(out, uiButton->GetText(), MakeRectangle(uiButton->m_rect), uiButton->GetFlags());
 }
 
 void Render(const UiList *uiList)
@@ -855,7 +875,7 @@ void Render(const UiList *uiList)
 		if (i == SelectedItem)
 			DrawSelector(rect);
 
-		Rectangle rectangle { { rect.x, rect.y }, { rect.w, rect.h } };
+		Rectangle rectangle = MakeRectangle(rect);
 		if (item->args.empty())
 			DrawString(out, item->m_text, rectangle, uiList->GetFlags() | item->uiFlags, uiList->GetSpacing());
 		else
@@ -865,33 +885,36 @@ void Render(const UiList *uiList)
 
 void Render(const UiScrollbar *uiSb)
 {
+	const Surface out = Surface(DiabloUiSurface());
+
 	// Bar background (tiled):
 	{
-		const int bgYEnd = DownArrowRect(uiSb).y;
-		int bgY = uiSb->m_rect.y + uiSb->m_arrow->h();
-		while (bgY < bgYEnd) {
-			std::size_t drawH = std::min(bgY + uiSb->m_bg->h(), bgYEnd) - bgY;
-			DrawArt({ uiSb->m_rect.x, bgY }, uiSb->m_bg, 0, SCROLLBAR_BG_WIDTH, drawH);
-			bgY += drawH;
+		const int bgY = uiSb->m_rect.y + uiSb->m_arrow.frameHeight();
+		const int bgH = DownArrowRect(uiSb).y - bgY;
+		const Surface backgroundOut = out.subregion(uiSb->m_rect.x, bgY, SCROLLBAR_BG_WIDTH, bgH);
+		int y = 0;
+		while (y < bgH) {
+			RenderPcxSprite(backgroundOut, uiSb->m_bg, { 0, y });
+			y += uiSb->m_bg.height();
 		}
 	}
 
 	// Arrows:
 	{
 		const SDL_Rect rect = UpArrowRect(uiSb);
-		const int frame = static_cast<int>(scrollBarState.upArrowPressed ? ScrollBarArrowFrame_UP_ACTIVE : ScrollBarArrowFrame_UP);
-		DrawArt({ rect.x, rect.y }, uiSb->m_arrow, frame, rect.w);
+		const auto frame = static_cast<uint16_t>(scrollBarState.upArrowPressed ? ScrollBarArrowFrame_UP_ACTIVE : ScrollBarArrowFrame_UP);
+		RenderPcxSprite(out.subregion(rect.x, 0, SCROLLBAR_ARROW_WIDTH, out.h()), uiSb->m_arrow.sprite(frame), { 0, rect.y });
 	}
 	{
 		const SDL_Rect rect = DownArrowRect(uiSb);
-		const int frame = static_cast<int>(scrollBarState.downArrowPressed ? ScrollBarArrowFrame_DOWN_ACTIVE : ScrollBarArrowFrame_DOWN);
-		DrawArt({ rect.x, rect.y }, uiSb->m_arrow, frame, rect.w);
+		const auto frame = static_cast<uint16_t>(scrollBarState.downArrowPressed ? ScrollBarArrowFrame_DOWN_ACTIVE : ScrollBarArrowFrame_DOWN);
+		RenderPcxSprite(out.subregion(rect.x, 0, SCROLLBAR_ARROW_WIDTH, out.h()), uiSb->m_arrow.sprite(frame), { 0, rect.y });
 	}
 
 	// Thumb:
 	if (SelectedItemMax > 0) {
 		const SDL_Rect rect = ThumbRect(uiSb, SelectedItem, SelectedItemMax + 1);
-		DrawArt({ rect.x, rect.y }, uiSb->m_thumb);
+		RenderPcxSprite(out, uiSb->m_thumb, { rect.x, rect.y });
 	}
 }
 
@@ -899,7 +922,8 @@ void Render(const UiEdit *uiEdit)
 {
 	DrawSelector(uiEdit->m_rect);
 
-	Rectangle rect { { uiEdit->m_rect.x + 43, uiEdit->m_rect.y + 1 }, { uiEdit->m_rect.w - 86, uiEdit->m_rect.h } };
+	// To simulate padding we inset the region used to draw text in an edit control
+	Rectangle rect = MakeRectangle(uiEdit->m_rect).inset({ 43, 1 });
 
 	const Surface &out = Surface(DiabloUiSurface());
 	DrawString(out, uiEdit->m_value, rect, uiEdit->GetFlags() | UiFlags::TextCursor);
@@ -921,6 +945,12 @@ void RenderItem(UiItemBase *item)
 		break;
 	case UiType::ImageCel:
 		Render(static_cast<UiImageCel *>(item));
+		break;
+	case UiType::ImagePcx:
+		Render(static_cast<UiImagePcx *>(item));
+		break;
+	case UiType::ImageAnimatedPcx:
+		Render(static_cast<UiImageAnimatedPcx *>(item));
 		break;
 	case UiType::ArtTextButton:
 		Render(static_cast<UiArtTextButton *>(item));

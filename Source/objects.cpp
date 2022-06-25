@@ -13,8 +13,6 @@
 #ifdef _DEBUG
 #include "debug.h"
 #endif
-#include "drlg_l1.h"
-#include "drlg_l4.h"
 #include "engine/load_file.hpp"
 #include "engine/points_in_rectangle_range.hpp"
 #include "engine/random.hpp"
@@ -22,14 +20,16 @@
 #include "init.h"
 #include "inv.h"
 #include "inv_iterators.hpp"
+#include "levels/drlg_l1.h"
+#include "levels/drlg_l4.h"
+#include "levels/setmaps.h"
+#include "levels/themes.h"
 #include "lighting.h"
 #include "minitext.h"
 #include "missiles.h"
 #include "monster.h"
 #include "options.h"
-#include "setmaps.h"
 #include "stores.h"
-#include "themes.h"
 #include "towners.h"
 #include "track.h"
 #include "utils/language.h"
@@ -301,9 +301,9 @@ bool RndLocOk(int xp, int yp)
 		return false;
 	if (TileContainsSetPiece({ xp, yp }))
 		return false;
-	if (nSolidTable[dPiece[xp][yp]])
+	if (TileHasAny(dPiece[xp][yp], TileProperties::Solid))
 		return false;
-	return IsNoneOf(leveltype, DTYPE_CATHEDRAL, DTYPE_CRYPT) || dPiece[xp][yp] <= 126 || dPiece[xp][yp] >= 144;
+	return IsNoneOf(leveltype, DTYPE_CATHEDRAL, DTYPE_CRYPT) || dPiece[xp][yp] <= 125 || dPiece[xp][yp] >= 143;
 }
 
 bool CanPlaceWallTrap(int xp, int yp)
@@ -313,7 +313,7 @@ bool CanPlaceWallTrap(int xp, int yp)
 	if (TileContainsSetPiece({ xp, yp }))
 		return false;
 
-	return nTrapTable[dPiece[xp][yp]];
+	return TileHasAny(dPiece[xp][yp], TileProperties::Trap);
 }
 
 void InitRndLocObj(int min, int max, _object_id objtype)
@@ -366,31 +366,36 @@ void InitRndLocBigObj(int min, int max, _object_id objtype)
 	}
 }
 
+bool CanPlaceRandomObject(Point position, Displacement standoff)
+{
+	for (int yy = -standoff.deltaY; yy <= standoff.deltaY; yy++) {
+		for (int xx = -standoff.deltaX; xx <= standoff.deltaX; xx++) {
+			Point tile = position + Displacement { xx, yy };
+			if (!RndLocOk(tile.x, tile.y))
+				return false;
+		}
+	}
+	return true;
+}
+
+std::optional<Point> GetRandomObjectPosition(Displacement standoff)
+{
+	for (int i = 0; i <= 20000; i++) {
+		Point position = Point { GenerateRnd(80), GenerateRnd(80) } + Displacement { 16, 16 };
+		if (CanPlaceRandomObject(position, standoff))
+			return position;
+	}
+	return {};
+}
+
 void InitRndLocObj5x5(int min, int max, _object_id objtype)
 {
 	int numobjs = min + GenerateRnd(max - min);
 	for (int i = 0; i < numobjs; i++) {
-		int xp;
-		int yp;
-		int cnt = 0;
-		bool exit = false;
-		while (!exit) {
-			exit = true;
-			xp = GenerateRnd(80) + 16;
-			yp = GenerateRnd(80) + 16;
-			for (int n = -2; n <= 2; n++) {
-				for (int m = -2; m <= 2; m++) {
-					if (!RndLocOk(xp + m, yp + n))
-						exit = false;
-				}
-			}
-			if (!exit) {
-				cnt++;
-				if (cnt > 20000)
-					return;
-			}
-		}
-		AddObject(objtype, { xp, yp });
+		std::optional<Point> position = GetRandomObjectPosition({ 2, 2 });
+		if (!position)
+			return;
+		AddObject(objtype, *position);
 	}
 }
 
@@ -411,7 +416,7 @@ void AddTortures()
 {
 	for (int oy = 0; oy < MAXDUNY; oy++) {
 		for (int ox = 0; ox < MAXDUNX; ox++) {
-			if (dPiece[ox][oy] == 367) {
+			if (dPiece[ox][oy] == 366) {
 				AddObject(OBJ_TORTURE1, { ox, oy + 1 });
 				AddObject(OBJ_TORTURE3, { ox + 2, oy - 1 });
 				AddObject(OBJ_TORTURE2, { ox, oy + 3 });
@@ -450,37 +455,19 @@ void AddCandles()
  */
 void AddBookLever(Rectangle affectedArea, _speech_id msg)
 {
-	int cnt = 0;
-	int xp;
-	int yp;
-	bool exit = false;
-	while (!exit) {
-		exit = true;
-		xp = GenerateRnd(80) + 16;
-		yp = GenerateRnd(80) + 16;
-		for (int n = -2; n <= 2; n++) {
-			for (int m = -2; m <= 2; m++) {
-				if (!RndLocOk(xp + m, yp + n))
-					exit = false;
-			}
-		}
-		if (!exit) {
-			cnt++;
-			if (cnt > 20000)
-				return;
-		}
-	}
+	std::optional<Point> position = GetRandomObjectPosition({ 2, 2 });
+	if (!position)
+		return;
 
 	if (Quests[Q_BLIND].IsAvailable())
-		AddObject(OBJ_BLINDBOOK, { xp, yp });
+		AddObject(OBJ_BLINDBOOK, *position);
 	if (Quests[Q_WARLORD].IsAvailable())
-		AddObject(OBJ_STEELTOME, { xp, yp });
+		AddObject(OBJ_STEELTOME, *position);
 	if (Quests[Q_BLOOD].IsAvailable()) {
-		xp = 2 * setpc_x + 25;
-		yp = 2 * setpc_y + 40;
-		AddObject(OBJ_BLOODBOOK, { xp, yp });
+		position = SetPiece.position.megaToWorld() + Displacement { 9, 24 };
+		AddObject(OBJ_BLOODBOOK, *position);
 	}
-	ObjectAtPosition({ xp, yp })->InitializeQuestBook(affectedArea, leverid, msg);
+	ObjectAtPosition(*position)->InitializeQuestBook(affectedArea, leverid, msg);
 	leverid++;
 }
 
@@ -546,19 +533,19 @@ void AddL2Torches()
 				continue;
 
 			int pn = dPiece[i][j];
-			if (pn == 1 && GenerateRnd(3) == 0) {
+			if (pn == 0 && GenerateRnd(3) == 0) {
 				AddObject(OBJ_TORCHL2, testPosition);
 			}
 
-			if (pn == 5 && GenerateRnd(3) == 0) {
+			if (pn == 4 && GenerateRnd(3) == 0) {
 				AddObject(OBJ_TORCHR2, testPosition);
 			}
 
-			if (pn == 37 && GenerateRnd(10) == 0 && !IsObjectAtPosition(testPosition + Direction::NorthWest)) {
+			if (pn == 36 && GenerateRnd(10) == 0 && !IsObjectAtPosition(testPosition + Direction::NorthWest)) {
 				AddObject(OBJ_TORCHL, testPosition + Direction::NorthWest);
 			}
 
-			if (pn == 41 && GenerateRnd(10) == 0 && !IsObjectAtPosition(testPosition + Direction::NorthEast)) {
+			if (pn == 40 && GenerateRnd(10) == 0 && !IsObjectAtPosition(testPosition + Direction::NorthEast)) {
 				AddObject(OBJ_TORCHR, testPosition + Direction::NorthEast);
 			}
 		}
@@ -648,7 +635,7 @@ void AddChestTraps()
 	}
 }
 
-void LoadMapObjects(const char *path, Point start, Rectangle mapRange, int leveridx)
+void LoadMapObjects(const char *path, Point start, Rectangle mapRange = {}, int leveridx = 0)
 {
 	LoadingMapObjects = true;
 	ApplyObjectLighting = true;
@@ -666,46 +653,14 @@ void LoadMapObjects(const char *path, Point start, Rectangle mapRange, int lever
 
 	const uint16_t *objectLayer = &dunData[layer2Offset + width * height * 2];
 
-	start += Displacement { 16, 16 };
 	for (int j = 0; j < height; j++) {
 		for (int i = 0; i < width; i++) {
 			auto objectId = static_cast<uint8_t>(SDL_SwapLE16(objectLayer[j * width + i]));
 			if (objectId != 0) {
 				Point mapPos = start + Displacement { i, j };
 				AddObject(ObjTypeConv[objectId], mapPos);
-				ObjectAtPosition(mapPos)->InitializeLoadedObject(mapRange, leveridx);
-			}
-		}
-	}
-
-	ApplyObjectLighting = false;
-	LoadingMapObjects = false;
-}
-
-void LoadMapObjs(const char *path, Point start)
-{
-	LoadingMapObjects = true;
-	ApplyObjectLighting = true;
-
-	auto dunData = LoadFileInMem<uint16_t>(path);
-
-	int width = SDL_SwapLE16(dunData[0]);
-	int height = SDL_SwapLE16(dunData[1]);
-
-	int layer2Offset = 2 + width * height;
-
-	// The rest of the layers are at dPiece scale
-	width *= 2;
-	height *= 2;
-
-	const uint16_t *objectLayer = &dunData[layer2Offset + width * height * 2];
-
-	start += Displacement { 16, 16 };
-	for (int j = 0; j < height; j++) {
-		for (int i = 0; i < width; i++) {
-			auto objectId = static_cast<uint8_t>(SDL_SwapLE16(objectLayer[j * width + i]));
-			if (objectId != 0) {
-				AddObject(ObjTypeConv[objectId], start + Displacement { i, j });
+				if (leveridx > 0)
+					ObjectAtPosition(mapPos)->InitializeLoadedObject(mapRange, leveridx);
 			}
 		}
 	}
@@ -716,9 +671,9 @@ void LoadMapObjs(const char *path, Point start)
 
 void AddDiabObjs()
 {
-	LoadMapObjects("Levels\\L4Data\\diab1.DUN", { 2 * diabquad1x, 2 * diabquad1y }, { { diabquad2x, diabquad2y }, { 11, 12 } }, 1);
-	LoadMapObjects("Levels\\L4Data\\diab2a.DUN", { 2 * diabquad2x, 2 * diabquad2y }, { { diabquad3x, diabquad3y }, { 11, 11 } }, 2);
-	LoadMapObjects("Levels\\L4Data\\diab3a.DUN", { 2 * diabquad3x, 2 * diabquad3y }, { { diabquad4x, diabquad4y }, { 9, 9 } }, 3);
+	LoadMapObjects("Levels\\L4Data\\diab1.DUN", DiabloQuad1.megaToWorld(), { DiabloQuad2, { 11, 12 } }, 1);
+	LoadMapObjects("Levels\\L4Data\\diab2a.DUN", DiabloQuad2.megaToWorld(), { DiabloQuad3, { 11, 11 } }, 2);
+	LoadMapObjects("Levels\\L4Data\\diab3a.DUN", DiabloQuad3.megaToWorld(), { DiabloQuad4, { 9, 9 } }, 3);
 }
 
 void AddCryptObject(Object &object, int a2)
@@ -839,7 +794,7 @@ void SetupObject(Object &object, Point position, _object_id ot)
 	object._oDoorFlag = false;
 }
 
-void AddCryptBook(_object_id ot, int v2, int ox, int oy)
+void AddCryptBook(_object_id ot, int v2, Point position)
 {
 	if (ActiveObjectCount >= MAXOBJECTS)
 		return;
@@ -847,47 +802,30 @@ void AddCryptBook(_object_id ot, int v2, int ox, int oy)
 	int oi = AvailableObjects[0];
 	AvailableObjects[0] = AvailableObjects[MAXOBJECTS - 1 - ActiveObjectCount];
 	ActiveObjects[ActiveObjectCount] = oi;
-	dObject[ox][oy] = oi + 1;
+	dObject[position.x][position.y] = oi + 1;
 	Object &object = Objects[oi];
-	SetupObject(object, { ox, oy }, ot);
+	SetupObject(object, position, ot);
 	AddCryptObject(object, v2);
 	ActiveObjectCount++;
 }
 
 void AddCryptStoryBook(int s)
 {
-	int cnt = 0;
-	int xp;
-	int yp;
-	bool exit = false;
-	while (!exit) {
-		exit = true;
-		xp = GenerateRnd(80) + 16;
-		yp = GenerateRnd(80) + 16;
-		for (int n = -2; n <= 2; n++) {
-			for (int m = -3; m <= 3; m++) {
-				if (!RndLocOk(xp + m, yp + n))
-					exit = false;
-			}
-		}
-		if (!exit) {
-			cnt++;
-			if (cnt > 20000)
-				return;
-		}
-	}
-	AddCryptBook(OBJ_L5BOOKS, s, xp, yp);
-	AddObject(OBJ_L5CANDLE, { xp - 2, yp + 1 });
-	AddObject(OBJ_L5CANDLE, { xp - 2, yp });
-	AddObject(OBJ_L5CANDLE, { xp - 1, yp - 1 });
-	AddObject(OBJ_L5CANDLE, { xp + 1, yp - 1 });
-	AddObject(OBJ_L5CANDLE, { xp + 2, yp });
-	AddObject(OBJ_L5CANDLE, { xp + 2, yp + 1 });
+	std::optional<Point> position = GetRandomObjectPosition({ 3, 2 });
+	if (!position)
+		return;
+	AddCryptBook(OBJ_L5BOOKS, s, *position);
+	AddObject(OBJ_L5CANDLE, *position + Displacement { -2, 1 });
+	AddObject(OBJ_L5CANDLE, *position + Displacement { -2, 0 });
+	AddObject(OBJ_L5CANDLE, *position + Displacement { -1, -1 });
+	AddObject(OBJ_L5CANDLE, *position + Displacement { 1, -1 });
+	AddObject(OBJ_L5CANDLE, *position + Displacement { 2, 0 });
+	AddObject(OBJ_L5CANDLE, *position + Displacement { 2, 1 });
 }
 
-void AddNakrulBook(int a1, int a2, int a3)
+void AddNakrulBook(int a1, Point position)
 {
-	AddCryptBook(OBJ_L5BOOKS, a1, a2, a3);
+	AddCryptBook(OBJ_L5BOOKS, a1, position);
 }
 
 void AddNakrulGate()
@@ -895,67 +833,51 @@ void AddNakrulGate()
 	AddNakrulLeaver();
 	switch (GenerateRnd(6)) {
 	case 0:
-		AddNakrulBook(6, UberRow + 3, UberCol);
-		AddNakrulBook(7, UberRow + 2, UberCol - 3);
-		AddNakrulBook(8, UberRow + 2, UberCol + 2);
+		AddNakrulBook(6, { UberRow + 3, UberCol });
+		AddNakrulBook(7, { UberRow + 2, UberCol - 3 });
+		AddNakrulBook(8, { UberRow + 2, UberCol + 2 });
 		break;
 	case 1:
-		AddNakrulBook(6, UberRow + 3, UberCol);
-		AddNakrulBook(8, UberRow + 2, UberCol - 3);
-		AddNakrulBook(7, UberRow + 2, UberCol + 2);
+		AddNakrulBook(6, { UberRow + 3, UberCol });
+		AddNakrulBook(8, { UberRow + 2, UberCol - 3 });
+		AddNakrulBook(7, { UberRow + 2, UberCol + 2 });
 		break;
 	case 2:
-		AddNakrulBook(7, UberRow + 3, UberCol);
-		AddNakrulBook(6, UberRow + 2, UberCol - 3);
-		AddNakrulBook(8, UberRow + 2, UberCol + 2);
+		AddNakrulBook(7, { UberRow + 3, UberCol });
+		AddNakrulBook(6, { UberRow + 2, UberCol - 3 });
+		AddNakrulBook(8, { UberRow + 2, UberCol + 2 });
 		break;
 	case 3:
-		AddNakrulBook(7, UberRow + 3, UberCol);
-		AddNakrulBook(8, UberRow + 2, UberCol - 3);
-		AddNakrulBook(6, UberRow + 2, UberCol + 2);
+		AddNakrulBook(7, { UberRow + 3, UberCol });
+		AddNakrulBook(8, { UberRow + 2, UberCol - 3 });
+		AddNakrulBook(6, { UberRow + 2, UberCol + 2 });
 		break;
 	case 4:
-		AddNakrulBook(8, UberRow + 3, UberCol);
-		AddNakrulBook(7, UberRow + 2, UberCol - 3);
-		AddNakrulBook(6, UberRow + 2, UberCol + 2);
+		AddNakrulBook(8, { UberRow + 3, UberCol });
+		AddNakrulBook(7, { UberRow + 2, UberCol - 3 });
+		AddNakrulBook(6, { UberRow + 2, UberCol + 2 });
 		break;
 	case 5:
-		AddNakrulBook(8, UberRow + 3, UberCol);
-		AddNakrulBook(6, UberRow + 2, UberCol - 3);
-		AddNakrulBook(7, UberRow + 2, UberCol + 2);
+		AddNakrulBook(8, { UberRow + 3, UberCol });
+		AddNakrulBook(6, { UberRow + 2, UberCol - 3 });
+		AddNakrulBook(7, { UberRow + 2, UberCol + 2 });
 		break;
 	}
 }
 
 void AddStoryBooks()
 {
-	int cnt = 0;
-	int xp;
-	int yp;
-	bool done = false;
-	while (!done) {
-		done = true;
-		xp = GenerateRnd(80) + 16;
-		yp = GenerateRnd(80) + 16;
-		for (int yy = -2; yy <= 2; yy++) {
-			for (int xx = -3; xx <= 3; xx++) {
-				if (!RndLocOk(xx + xp, yy + yp))
-					done = false;
-			}
-		}
-		if (!done) {
-			cnt++;
-			if (cnt > 20000)
-				return;
-		}
-	}
-	AddObject(OBJ_STORYBOOK, { xp, yp });
-	AddObject(OBJ_STORYCANDLE, { xp - 2, yp + 1 });
-	AddObject(OBJ_STORYCANDLE, { xp - 2, yp });
-	AddObject(OBJ_STORYCANDLE, { xp - 1, yp - 1 });
-	AddObject(OBJ_STORYCANDLE, { xp + 1, yp - 1 });
-	AddObject(OBJ_STORYCANDLE, { xp + 2, yp });
-	AddObject(OBJ_STORYCANDLE, { xp + 2, yp + 1 });
+	std::optional<Point> position = GetRandomObjectPosition({ 3, 2 });
+	if (!position)
+		return;
+
+	AddObject(OBJ_STORYBOOK, *position);
+	AddObject(OBJ_STORYCANDLE, *position + Displacement { -2, 1 });
+	AddObject(OBJ_STORYCANDLE, *position + Displacement { -2, 0 });
+	AddObject(OBJ_STORYCANDLE, *position + Displacement { -1, -1 });
+	AddObject(OBJ_STORYCANDLE, *position + Displacement { 1, -1 });
+	AddObject(OBJ_STORYCANDLE, *position + Displacement { 2, 0 });
+	AddObject(OBJ_STORYCANDLE, *position + Displacement { 2, 1 });
 }
 
 void AddHookedBodies(int freq)
@@ -968,7 +890,7 @@ void AddHookedBodies(int freq)
 				continue;
 			if (GenerateRnd(freq) != 0)
 				continue;
-			if (!SkipThemeRoom(i, j))
+			if (IsNearThemeRoom({ i, j }))
 				continue;
 			if (dungeon[i][j] == 1 && dungeon[i + 1][j] == 6) {
 				switch (GenerateRnd(3)) {
@@ -1098,37 +1020,27 @@ void AddChest(int i, int t)
 void ObjSetMicro(Point position, int pn)
 {
 	dPiece[position.x][position.y] = pn;
-	pn--;
-
-	int blocks = leveltype != DTYPE_HELL ? 10 : 16;
-
-	uint16_t *piece = &pLevelPieces[blocks * pn];
-	MICROS &micros = dpiece_defs_map_2[position.x][position.y];
-
-	for (int i = 0; i < blocks; i++) {
-		micros.mt[i] = SDL_SwapLE16(piece[blocks - 2 + (i & 1) - (i & 0xE)]);
-	}
 }
 
 void InitializeL1Door(Object &door)
 {
 	door.InitializeDoor();
-	door._oVar1 = dPiece[door.position.x][door.position.y];
+	door._oVar1 = dPiece[door.position.x][door.position.y] + 1;
 	if (door._otype == _object_id::OBJ_L1LDOOR) {
-		door._oVar2 = dPiece[door.position.x][door.position.y - 1];
+		door._oVar2 = dPiece[door.position.x][door.position.y - 1] + 1;
 	} else { // _object_id::OBJ_L1RDOOR
-		door._oVar2 = dPiece[door.position.x - 1][door.position.y];
+		door._oVar2 = dPiece[door.position.x - 1][door.position.y] + 1;
 	}
 }
 
 void InitializeL5Door(Object &door)
 {
 	door.InitializeDoor();
-	door._oVar1 = dPiece[door.position.x][door.position.y];
+	door._oVar1 = dPiece[door.position.x][door.position.y] + 1;
 	if (door._otype == _object_id::OBJ_L5LDOOR) {
-		door._oVar2 = dPiece[door.position.x][door.position.y - 1];
+		door._oVar2 = dPiece[door.position.x][door.position.y - 1] + 1;
 	} else { // _object_id::OBJ_L5RDOOR
-		door._oVar2 = dPiece[door.position.x - 1][door.position.y];
+		door._oVar2 = dPiece[door.position.x - 1][door.position.y] + 1;
 	}
 }
 
@@ -1138,16 +1050,16 @@ void InitializeMicroDoor(Object &door)
 	int pieceNumber;
 	switch (door._otype) {
 	case _object_id::OBJ_L2LDOOR:
-		pieceNumber = 538;
+		pieceNumber = 537;
 		break;
 	case _object_id::OBJ_L2RDOOR:
-		pieceNumber = 540;
+		pieceNumber = 539;
 		break;
 	case _object_id::OBJ_L3LDOOR:
-		pieceNumber = 531;
+		pieceNumber = 530;
 		break;
 	case _object_id::OBJ_L3RDOOR:
-		pieceNumber = 534;
+		pieceNumber = 533;
 		break;
 	default:
 		return; // unreachable
@@ -1219,6 +1131,7 @@ void AddBarrel(Object &barrel)
 
 void AddShrine(int i)
 {
+	Objects[i]._oRndSeed = AdvanceRndSeed();
 	bool slist[NumberOfShrineTypes];
 
 	Objects[i]._oPreFlag = true;
@@ -1336,10 +1249,10 @@ void AddBrnCross(int i)
 
 void AddPedistal(int i)
 {
-	Objects[i]._oVar1 = setpc_x;
-	Objects[i]._oVar2 = setpc_y;
-	Objects[i]._oVar3 = setpc_x + setpc_w;
-	Objects[i]._oVar4 = setpc_y + setpc_h;
+	Objects[i]._oVar1 = SetPiece.position.x;
+	Objects[i]._oVar2 = SetPiece.position.y;
+	Objects[i]._oVar3 = SetPiece.position.x + SetPiece.size.width;
+	Objects[i]._oVar4 = SetPiece.position.y + SetPiece.size.height;
 	Objects[i]._oVar6 = 0;
 }
 
@@ -1426,7 +1339,7 @@ void UpdateObjectLight(Object &light, int lightRadius)
 	if (!DisableLighting) {
 		for (int p = 0; p < MAX_PLRS && !turnon; p++) {
 			if (Players[p].plractive) {
-				if (currlevel == Players[p].plrlevel) {
+				if (Players[p].isOnActiveLevel()) {
 					int dx = abs(Players[p].position.tile.x - ox);
 					int dy = abs(Players[p].position.tile.y - oy);
 					if (dx < tr && dy < tr)
@@ -1611,12 +1524,12 @@ void ObjSetMini(Point position, int v)
 {
 	MegaTile mega = pMegaTiles[v - 1];
 
-	Point megaOrigin = position * 2 + Displacement { 16, 16 };
+	Point megaOrigin = position.megaToWorld();
 
-	ObjSetMicro(megaOrigin, SDL_SwapLE16(mega.micro1) + 1);
-	ObjSetMicro(megaOrigin + Direction::SouthEast, SDL_SwapLE16(mega.micro2) + 1);
-	ObjSetMicro(megaOrigin + Direction::SouthWest, SDL_SwapLE16(mega.micro3) + 1);
-	ObjSetMicro(megaOrigin + Direction::South, SDL_SwapLE16(mega.micro4) + 1);
+	ObjSetMicro(megaOrigin, SDL_SwapLE16(mega.micro1));
+	ObjSetMicro(megaOrigin + Direction::SouthEast, SDL_SwapLE16(mega.micro2));
+	ObjSetMicro(megaOrigin + Direction::SouthWest, SDL_SwapLE16(mega.micro3));
+	ObjSetMicro(megaOrigin + Direction::South, SDL_SwapLE16(mega.micro4));
 }
 
 void ObjL1Special(int x1, int y1, int x2, int y2)
@@ -1624,37 +1537,37 @@ void ObjL1Special(int x1, int y1, int x2, int y2)
 	for (int i = y1; i <= y2; ++i) {
 		for (int j = x1; j <= x2; ++j) {
 			dSpecial[j][i] = 0;
-			if (dPiece[j][i] == 12)
-				dSpecial[j][i] = 1;
 			if (dPiece[j][i] == 11)
-				dSpecial[j][i] = 2;
-			if (dPiece[j][i] == 71)
 				dSpecial[j][i] = 1;
-			if (dPiece[j][i] == 253)
+			if (dPiece[j][i] == 10)
+				dSpecial[j][i] = 2;
+			if (dPiece[j][i] == 70)
+				dSpecial[j][i] = 1;
+			if (dPiece[j][i] == 252)
 				dSpecial[j][i] = 3;
-			if (dPiece[j][i] == 267)
+			if (dPiece[j][i] == 266)
 				dSpecial[j][i] = 6;
-			if (dPiece[j][i] == 259)
+			if (dPiece[j][i] == 258)
 				dSpecial[j][i] = 5;
-			if (dPiece[j][i] == 249)
+			if (dPiece[j][i] == 248)
 				dSpecial[j][i] = 2;
-			if (dPiece[j][i] == 325)
+			if (dPiece[j][i] == 324)
 				dSpecial[j][i] = 2;
-			if (dPiece[j][i] == 321)
+			if (dPiece[j][i] == 320)
 				dSpecial[j][i] = 1;
-			if (dPiece[j][i] == 255)
+			if (dPiece[j][i] == 254)
 				dSpecial[j][i] = 4;
-			if (dPiece[j][i] == 211)
+			if (dPiece[j][i] == 210)
 				dSpecial[j][i] = 1;
-			if (dPiece[j][i] == 344)
+			if (dPiece[j][i] == 343)
 				dSpecial[j][i] = 2;
-			if (dPiece[j][i] == 341)
+			if (dPiece[j][i] == 340)
 				dSpecial[j][i] = 1;
-			if (dPiece[j][i] == 331)
+			if (dPiece[j][i] == 330)
 				dSpecial[j][i] = 2;
-			if (dPiece[j][i] == 418)
+			if (dPiece[j][i] == 417)
 				dSpecial[j][i] = 1;
-			if (dPiece[j][i] == 421)
+			if (dPiece[j][i] == 420)
 				dSpecial[j][i] = 2;
 		}
 	}
@@ -1665,25 +1578,25 @@ void ObjL2Special(int x1, int y1, int x2, int y2)
 	for (int j = y1; j <= y2; j++) {
 		for (int i = x1; i <= x2; i++) {
 			dSpecial[i][j] = 0;
+			if (dPiece[i][j] == 540)
+				dSpecial[i][j] = 5;
+			if (dPiece[i][j] == 177)
+				dSpecial[i][j] = 5;
+			if (dPiece[i][j] == 550)
+				dSpecial[i][j] = 5;
 			if (dPiece[i][j] == 541)
-				dSpecial[i][j] = 5;
-			if (dPiece[i][j] == 178)
-				dSpecial[i][j] = 5;
-			if (dPiece[i][j] == 551)
-				dSpecial[i][j] = 5;
-			if (dPiece[i][j] == 542)
 				dSpecial[i][j] = 6;
-			if (dPiece[i][j] == 553)
+			if (dPiece[i][j] == 552)
 				dSpecial[i][j] = 6;
 		}
 	}
 	for (int j = y1; j <= y2; j++) {
 		for (int i = x1; i <= x2; i++) {
-			if (dPiece[i][j] == 132) {
+			if (dPiece[i][j] == 131) {
 				dSpecial[i][j + 1] = 2;
 				dSpecial[i][j + 2] = 1;
 			}
-			if (dPiece[i][j] == 135 || dPiece[i][j] == 139) {
+			if (dPiece[i][j] == 134 || dPiece[i][j] == 138) {
 				dSpecial[i + 1][j] = 3;
 				dSpecial[i + 2][j] = 4;
 			}
@@ -1691,65 +1604,55 @@ void ObjL2Special(int x1, int y1, int x2, int y2)
 	}
 }
 
-void SetDoorPiece(Point position)
-{
-	int pn = dPiece[position.x][position.y] - 1;
-
-	uint16_t *piece = &pLevelPieces[10 * pn + 8];
-
-	dpiece_defs_map_2[position.x][position.y].mt[0] = SDL_SwapLE16(piece[0]);
-	dpiece_defs_map_2[position.x][position.y].mt[1] = SDL_SwapLE16(piece[1]);
-}
-
 void DoorSet(Point position, bool isLeftDoor)
 {
 	int pn = dPiece[position.x][position.y];
 	switch (pn) {
-	case 43:
-		ObjSetMicro(position, 392);
+	case 42:
+		ObjSetMicro(position, 391);
 		break;
-	case 45:
-		ObjSetMicro(position, 394);
+	case 44:
+		ObjSetMicro(position, 393);
 		break;
-	case 50:
-		ObjSetMicro(position, isLeftDoor ? 411 : 412);
+	case 49:
+		ObjSetMicro(position, isLeftDoor ? 410 : 411);
+		break;
+	case 53:
+		ObjSetMicro(position, 396);
 		break;
 	case 54:
 		ObjSetMicro(position, 397);
 		break;
-	case 55:
+	case 60:
 		ObjSetMicro(position, 398);
 		break;
-	case 61:
+	case 66:
 		ObjSetMicro(position, 399);
 		break;
 	case 67:
 		ObjSetMicro(position, 400);
 		break;
 	case 68:
-		ObjSetMicro(position, 401);
+		ObjSetMicro(position, 402);
 		break;
 	case 69:
 		ObjSetMicro(position, 403);
 		break;
-	case 70:
-		ObjSetMicro(position, 404);
+	case 71:
+		ObjSetMicro(position, 405);
 		break;
-	case 72:
+	case 211:
 		ObjSetMicro(position, 406);
 		break;
-	case 212:
-		ObjSetMicro(position, 407);
+	case 353:
+		ObjSetMicro(position, 408);
 		break;
 	case 354:
 		ObjSetMicro(position, 409);
 		break;
-	case 355:
-		ObjSetMicro(position, 410);
-		break;
+	case 410:
 	case 411:
-	case 412:
-		ObjSetMicro(position, 396);
+		ObjSetMicro(position, 395);
 		break;
 	}
 }
@@ -1758,42 +1661,42 @@ void CryptDoorSet(Point position, bool isLeftDoor)
 {
 	int pn = dPiece[position.x][position.y];
 	switch (pn) {
-	case 75:
-		ObjSetMicro(position, 204);
+	case 74:
+		ObjSetMicro(position, 203);
 		break;
-	case 79:
-		ObjSetMicro(position, 208);
+	case 78:
+		ObjSetMicro(position, 207);
 		break;
-	case 86:
-		ObjSetMicro(position, isLeftDoor ? 232 : 234);
+	case 85:
+		ObjSetMicro(position, isLeftDoor ? 231 : 233);
 		break;
-	case 91:
-		ObjSetMicro(position, 215);
+	case 90:
+		ObjSetMicro(position, 214);
 		break;
-	case 93:
-		ObjSetMicro(position, 218);
+	case 92:
+		ObjSetMicro(position, 217);
 		break;
-	case 99:
-		ObjSetMicro(position, 220);
+	case 98:
+		ObjSetMicro(position, 219);
 		break;
-	case 111:
-		ObjSetMicro(position, 222);
+	case 110:
+		ObjSetMicro(position, 221);
 		break;
-	case 113:
-		ObjSetMicro(position, 224);
+	case 112:
+		ObjSetMicro(position, 223);
 		break;
-	case 115:
-		ObjSetMicro(position, 226);
+	case 114:
+		ObjSetMicro(position, 225);
 		break;
-	case 117:
-		ObjSetMicro(position, 228);
+	case 116:
+		ObjSetMicro(position, 227);
 		break;
-	case 119:
-		ObjSetMicro(position, 230);
+	case 118:
+		ObjSetMicro(position, 229);
 		break;
-	case 232:
-	case 234:
-		ObjSetMicro(position, 212);
+	case 231:
+	case 233:
+		ObjSetMicro(position, 211);
 		break;
 	}
 }
@@ -1828,9 +1731,8 @@ void OperateL1RDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_OPENDOOR, oi);
 		if (!deltaload)
 			PlaySfxLoc(IS_DOOROPEN, door.position);
-		ObjSetMicro(door.position, 395);
+		ObjSetMicro(door.position, 394);
 		dSpecial[door.position.x][door.position.y] = 8;
-		SetDoorPiece(door.position + Direction::NorthEast);
 		door._oAnimFrame += 2;
 		door._oPreFlag = true;
 		DoorSet(door.position + Direction::NorthWest, false);
@@ -1847,14 +1749,14 @@ void OperateL1RDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_CLOSEDOOR, oi);
 		door._oVar4 = 0;
 		door._oSelFlag = 3;
-		ObjSetMicro(door.position, door._oVar1);
+		ObjSetMicro(door.position, door._oVar1 - 1);
 
 		// Restore the normal tile where the open door used to be
 		auto openPosition = door.position + Direction::NorthWest;
-		if (door._oVar2 == 50 && dPiece[openPosition.x][openPosition.y] == 396)
-			ObjSetMicro(openPosition, 411);
+		if (door._oVar2 == 50 && dPiece[openPosition.x][openPosition.y] == 395)
+			ObjSetMicro(openPosition, 410);
 		else
-			ObjSetMicro(openPosition, door._oVar2);
+			ObjSetMicro(openPosition, door._oVar2 - 1);
 
 		dSpecial[door.position.x][door.position.y] = 0;
 		door._oAnimFrame -= 2;
@@ -1881,11 +1783,10 @@ void OperateL1LDoor(int pnum, int oi, bool sendflag)
 		if (!deltaload)
 			PlaySfxLoc(IS_DOOROPEN, door.position);
 		if (door._oVar1 == 214)
-			ObjSetMicro(door.position, 408);
+			ObjSetMicro(door.position, 407);
 		else
-			ObjSetMicro(door.position, 393);
+			ObjSetMicro(door.position, 392);
 		dSpecial[door.position.x][door.position.y] = 7;
-		SetDoorPiece(door.position + Direction::NorthWest);
 		door._oAnimFrame += 2;
 		door._oPreFlag = true;
 		DoorSet(door.position + Direction::NorthEast, true);
@@ -1902,14 +1803,14 @@ void OperateL1LDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_CLOSEDOOR, oi);
 		door._oVar4 = 0;
 		door._oSelFlag = 3;
-		ObjSetMicro(door.position, door._oVar1);
+		ObjSetMicro(door.position, door._oVar1 - 1);
 
 		// Restore the normal tile where the open door used to be
 		auto openPosition = door.position + Direction::NorthEast;
-		if (door._oVar2 == 50 && dPiece[openPosition.x][openPosition.y] == 396)
-			ObjSetMicro(openPosition, 412);
+		if (door._oVar2 == 50 && dPiece[openPosition.x][openPosition.y] == 395)
+			ObjSetMicro(openPosition, 411);
 		else
-			ObjSetMicro(openPosition, door._oVar2);
+			ObjSetMicro(openPosition, door._oVar2 - 1);
 
 		dSpecial[door.position.x][door.position.y] = 0;
 		door._oAnimFrame -= 2;
@@ -1935,7 +1836,7 @@ void OperateL2RDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_OPENDOOR, oi);
 		if (!deltaload)
 			PlaySfxLoc(IS_DOOROPEN, door.position);
-		ObjSetMicro(door.position, 17);
+		ObjSetMicro(door.position, 16);
 		dSpecial[door.position.x][door.position.y] = 6;
 		door._oAnimFrame += 2;
 		door._oPreFlag = true;
@@ -1953,7 +1854,7 @@ void OperateL2RDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_CLOSEDOOR, oi);
 		door._oVar4 = 0;
 		door._oSelFlag = 3;
-		ObjSetMicro(door.position, 540);
+		ObjSetMicro(door.position, 539);
 		dSpecial[door.position.x][door.position.y] = 0;
 		door._oAnimFrame -= 2;
 		door._oPreFlag = false;
@@ -1978,7 +1879,7 @@ void OperateL2LDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_OPENDOOR, oi);
 		if (!deltaload)
 			PlaySfxLoc(IS_DOOROPEN, door.position);
-		ObjSetMicro(door.position, 13);
+		ObjSetMicro(door.position, 12);
 		dSpecial[door.position.x][door.position.y] = 5;
 		door._oAnimFrame += 2;
 		door._oPreFlag = true;
@@ -1996,7 +1897,7 @@ void OperateL2LDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_CLOSEDOOR, oi);
 		door._oVar4 = 0;
 		door._oSelFlag = 3;
-		ObjSetMicro(door.position, 538);
+		ObjSetMicro(door.position, 537);
 		dSpecial[door.position.x][door.position.y] = 0;
 		door._oAnimFrame -= 2;
 		door._oPreFlag = false;
@@ -2021,7 +1922,7 @@ void OperateL3RDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_OPENDOOR, oi);
 		if (!deltaload)
 			PlaySfxLoc(IS_DOOROPEN, door.position);
-		ObjSetMicro(door.position, 541);
+		ObjSetMicro(door.position, 540);
 		door._oAnimFrame += 2;
 		door._oPreFlag = true;
 		door._oVar4 = 1;
@@ -2038,7 +1939,7 @@ void OperateL3RDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_CLOSEDOOR, oi);
 		door._oVar4 = 0;
 		door._oSelFlag = 3;
-		ObjSetMicro(door.position, 534);
+		ObjSetMicro(door.position, 533);
 		door._oAnimFrame -= 2;
 		door._oPreFlag = false;
 		RedoPlayerVision();
@@ -2062,7 +1963,7 @@ void OperateL3LDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_OPENDOOR, oi);
 		if (!deltaload)
 			PlaySfxLoc(IS_DOOROPEN, door.position);
-		ObjSetMicro(door.position, 538);
+		ObjSetMicro(door.position, 537);
 		door._oAnimFrame += 2;
 		door._oPreFlag = true;
 		door._oVar4 = 1;
@@ -2079,7 +1980,7 @@ void OperateL3LDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_CLOSEDOOR, oi);
 		door._oVar4 = 0;
 		door._oSelFlag = 3;
-		ObjSetMicro(door.position, 531);
+		ObjSetMicro(door.position, 530);
 		door._oAnimFrame -= 2;
 		door._oPreFlag = false;
 		RedoPlayerVision();
@@ -2103,9 +2004,8 @@ void OperateL5RDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_OPENDOOR, oi);
 		if (!deltaload)
 			PlaySfxLoc(IS_CROPEN, door.position);
-		ObjSetMicro(door.position, 209);
+		ObjSetMicro(door.position, 208);
 		dSpecial[door.position.x][door.position.y] = 2;
-		SetDoorPiece(door.position + Direction::NorthEast);
 		door._oAnimFrame += 2;
 		door._oPreFlag = true;
 		CryptDoorSet(door.position + Direction::NorthWest, false);
@@ -2122,14 +2022,14 @@ void OperateL5RDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_CLOSEDOOR, oi);
 		door._oVar4 = 0;
 		door._oSelFlag = 3;
-		ObjSetMicro(door.position, door._oVar1);
+		ObjSetMicro(door.position, door._oVar1 - 1);
 
 		// Restore the normal tile where the open door used to be
 		auto openPosition = door.position + Direction::NorthWest;
-		if (door._oVar2 == 86 && dPiece[openPosition.x][openPosition.y] == 210)
-			ObjSetMicro(openPosition, 232);
+		if (door._oVar2 == 86 && dPiece[openPosition.x][openPosition.y] == 209)
+			ObjSetMicro(openPosition, 231);
 		else
-			ObjSetMicro(openPosition, door._oVar2);
+			ObjSetMicro(openPosition, door._oVar2 - 1);
 
 		dSpecial[door.position.x][door.position.y] = 0;
 		door._oAnimFrame -= 2;
@@ -2155,9 +2055,8 @@ void OperateL5LDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_OPENDOOR, oi);
 		if (!deltaload)
 			PlaySfxLoc(IS_CROPEN, door.position);
-		ObjSetMicro(door.position, 206);
+		ObjSetMicro(door.position, 205);
 		dSpecial[door.position.x][door.position.y] = 1;
-		SetDoorPiece(door.position + Direction::NorthWest);
 		door._oAnimFrame += 2;
 		door._oPreFlag = true;
 		CryptDoorSet(door.position + Direction::NorthEast, true);
@@ -2174,14 +2073,14 @@ void OperateL5LDoor(int pnum, int oi, bool sendflag)
 			NetSendCmdParam1(true, CMD_CLOSEDOOR, oi);
 		door._oVar4 = 0;
 		door._oSelFlag = 3;
-		ObjSetMicro(door.position, door._oVar1);
+		ObjSetMicro(door.position, door._oVar1 - 1);
 
 		// Restore the normal tile where the open door used to be
 		auto openPosition = door.position + Direction::NorthEast;
-		if (door._oVar2 == 86 && dPiece[openPosition.x][openPosition.y] == 210)
-			ObjSetMicro(openPosition, 234);
+		if (door._oVar2 == 86 && dPiece[openPosition.x][openPosition.y] == 209)
+			ObjSetMicro(openPosition, 233);
 		else
-			ObjSetMicro(openPosition, door._oVar2);
+			ObjSetMicro(openPosition, door._oVar2 - 1);
 
 		dSpecial[door.position.x][door.position.y] = 0;
 		door._oAnimFrame -= 2;
@@ -2326,8 +2225,6 @@ void OperateBook(int pnum, Object &book)
 
 void OperateBookLever(int pnum, int i)
 {
-	int x = 2 * setpc_x + 16;
-	int y = 2 * setpc_y + 16;
 	if (ActiveItemCount >= MAXITEMS) {
 		return;
 	}
@@ -2341,7 +2238,7 @@ void OperateBookLever(int pnum, int i)
 			Quests[Q_BLOOD]._qactive = QUEST_ACTIVE;
 			Quests[Q_BLOOD]._qlog = true;
 			Quests[Q_BLOOD]._qvar1 = 1;
-			SpawnQuestItem(IDI_BLDSTONE, { 2 * setpc_x + 25, 2 * setpc_y + 33 }, 0, 1);
+			SpawnQuestItem(IDI_BLDSTONE, SetPiece.position.megaToWorld() + Displacement { 9, 17 }, 0, 1);
 		}
 		if (Objects[i]._otype == OBJ_STEELTOME && Quests[Q_WARLORD]._qvar1 == 0) {
 			Quests[Q_WARLORD]._qactive = QUEST_ACTIVE;
@@ -2352,10 +2249,10 @@ void OperateBookLever(int pnum, int i)
 			if (Objects[i]._otype != OBJ_BLOODBOOK)
 				ObjChangeMap(Objects[i]._oVar1, Objects[i]._oVar2, Objects[i]._oVar3, Objects[i]._oVar4);
 			if (Objects[i]._otype == OBJ_BLINDBOOK) {
-				SpawnUnique(UITEM_OPTAMULET, Point { x, y } + Displacement { 5, 5 });
+				SpawnUnique(UITEM_OPTAMULET, SetPiece.position.megaToWorld() + Displacement { 5, 5 });
 				auto tren = TransVal;
 				TransVal = 9;
-				DRLG_MRectTrans(Objects[i]._oVar1, Objects[i]._oVar2, Objects[i]._oVar3, Objects[i]._oVar4);
+				DRLG_MRectTrans({ Objects[i]._oVar1, Objects[i]._oVar2 }, { Objects[i]._oVar3, Objects[i]._oVar4 });
 				TransVal = tren;
 			}
 		}
@@ -2642,21 +2539,21 @@ void OperatePedistal(int pnum, int i)
 	if (Objects[i]._oVar6 == 1) {
 		if (!deltaload)
 			PlaySfxLoc(LS_PUDDLE, Objects[i].position);
-		ObjChangeMap(setpc_x, setpc_y + 3, setpc_x + 2, setpc_y + 7);
-		SpawnQuestItem(IDI_BLDSTONE, { 2 * setpc_x + 19, 2 * setpc_y + 26 }, 0, 1);
+		ObjChangeMap(SetPiece.position.x, SetPiece.position.y + 3, SetPiece.position.x + 2, SetPiece.position.y + 7);
+		SpawnQuestItem(IDI_BLDSTONE, SetPiece.position.megaToWorld() + Displacement { 3, 10 }, 0, 1);
 	}
 	if (Objects[i]._oVar6 == 2) {
 		if (!deltaload)
 			PlaySfxLoc(LS_PUDDLE, Objects[i].position);
-		ObjChangeMap(setpc_x + 6, setpc_y + 3, setpc_x + setpc_w, setpc_y + 7);
-		SpawnQuestItem(IDI_BLDSTONE, { 2 * setpc_x + 31, 2 * setpc_y + 26 }, 0, 1);
+		ObjChangeMap(SetPiece.position.x + 6, SetPiece.position.y + 3, SetPiece.position.x + SetPiece.size.width, SetPiece.position.y + 7);
+		SpawnQuestItem(IDI_BLDSTONE, SetPiece.position.megaToWorld() + Displacement { 15, 10 }, 0, 1);
 	}
 	if (Objects[i]._oVar6 == 3) {
 		if (!deltaload)
 			PlaySfxLoc(LS_BLODSTAR, Objects[i].position);
 		ObjChangeMap(Objects[i]._oVar1, Objects[i]._oVar2, Objects[i]._oVar3, Objects[i]._oVar4);
-		LoadMapObjs("Levels\\L2Data\\Blood2.DUN", { 2 * setpc_x, 2 * setpc_y });
-		SpawnUnique(UITEM_ARMOFVAL, Point { setpc_x, setpc_y } * 2 + Displacement { 25, 19 });
+		LoadMapObjects("Levels\\L2Data\\Blood2.DUN", SetPiece.position.megaToWorld());
+		SpawnUnique(UITEM_ARMOFVAL, SetPiece.position.megaToWorld() + Displacement { 9, 3 });
 		Objects[i]._oSelFlag = 0;
 	}
 }
@@ -3771,30 +3668,16 @@ void OperateArmorStand(int pnum, int i, bool sendmsg)
 
 int FindValidShrine()
 {
-	bool done = false;
-	int rv;
-	do {
-		rv = GenerateRnd(gbIsHellfire ? NumberOfShrineTypes : 26);
-		if (currlevel >= shrinemin[rv] && currlevel <= shrinemax[rv] && rv != ShrineThaumaturgic) {
-			done = true;
-		}
-		if (done) {
-			if (gbIsMultiplayer) {
-				if (shrineavail[rv] == ShrineTypeSingle) {
-					done = false;
-					continue;
-				}
-			}
-			if (!gbIsMultiplayer) {
-				if (shrineavail[rv] == ShrineTypeMulti) {
-					done = false;
-					continue;
-				}
-			}
-			done = true;
-		}
-	} while (!done);
-	return rv;
+	for (;;) {
+		int rv = GenerateRnd(gbIsHellfire ? NumberOfShrineTypes : 26);
+		if (currlevel < shrinemin[rv] || currlevel > shrinemax[rv] || rv == ShrineThaumaturgic)
+			continue;
+		if (gbIsMultiplayer && shrineavail[rv] == ShrineTypeSingle)
+			continue;
+		if (!gbIsMultiplayer && shrineavail[rv] == ShrineTypeMulti)
+			continue;
+		return rv;
+	}
 }
 
 void OperateGoatShrine(int pnum, int i, _sfx_id sType)
@@ -4239,7 +4122,7 @@ void SyncQSTLever(const Object &qstLever)
 		if (qstLever._otype == OBJ_BLINDBOOK) {
 			auto tren = TransVal;
 			TransVal = 9;
-			DRLG_MRectTrans(qstLever._oVar1, qstLever._oVar2, qstLever._oVar3, qstLever._oVar4);
+			DRLG_MRectTrans({ qstLever._oVar1, qstLever._oVar2 }, { qstLever._oVar3, qstLever._oVar4 });
 			TransVal = tren;
 		}
 	}
@@ -4255,7 +4138,7 @@ void SyncPedestal(const Object &pedestal, Point origin, int width)
 	}
 	if (pedestal._oVar6 == 3) {
 		ObjChangeMapResync(pedestal._oVar1, pedestal._oVar2, pedestal._oVar3, pedestal._oVar4);
-		LoadMapObjs("Levels\\L2Data\\Blood2.DUN", origin * 2);
+		LoadMapObjects("Levels\\L2Data\\Blood2.DUN", origin.megaToWorld());
 	}
 }
 
@@ -4272,14 +4155,12 @@ void SyncL1Doors(Object &door)
 	bool isLeftDoor = door._otype == _object_id::OBJ_L1LDOOR; // otherwise the door is type OBJ_L1RDOOR
 
 	if (isLeftDoor) {
-		ObjSetMicro(door.position, door._oVar1 == 214 ? 408 : 393);
+		ObjSetMicro(door.position, door._oVar1 == 214 ? 407 : 392);
 		dSpecial[door.position.x][door.position.y] = 7;
-		SetDoorPiece(door.position + Direction::NorthWest);
 		DoorSet(door.position + Direction::NorthEast, isLeftDoor);
 	} else {
-		ObjSetMicro(door.position, 395);
+		ObjSetMicro(door.position, 394);
 		dSpecial[door.position.x][door.position.y] = 8;
-		SetDoorPiece(door.position + Direction::NorthEast);
 		DoorSet(door.position + Direction::NorthWest, isLeftDoor);
 	}
 }
@@ -4293,12 +4174,12 @@ void SyncL2Doors(Object &door)
 
 	switch (door._oVar4) {
 	case 0:
-		ObjSetMicro(door.position, isLeftDoor ? 538 : 540);
+		ObjSetMicro(door.position, isLeftDoor ? 537 : 539);
 		dSpecial[door.position.x][door.position.y] = 0;
 		break;
 	case 1:
 	case 2:
-		ObjSetMicro(door.position, isLeftDoor ? 13 : 17);
+		ObjSetMicro(door.position, isLeftDoor ? 12 : 16);
 		dSpecial[door.position.x][door.position.y] = isLeftDoor ? 5 : 6;
 		break;
 	}
@@ -4313,11 +4194,11 @@ void SyncL3Doors(Object &door)
 
 	switch (door._oVar4) {
 	case 0:
-		ObjSetMicro(door.position, isLeftDoor ? 531 : 534);
+		ObjSetMicro(door.position, isLeftDoor ? 530 : 533);
 		break;
 	case 1:
 	case 2:
-		ObjSetMicro(door.position, isLeftDoor ? 538 : 541);
+		ObjSetMicro(door.position, isLeftDoor ? 537 : 540);
 		break;
 	}
 }
@@ -4335,14 +4216,12 @@ void SyncL5Doors(Object &door)
 	bool isLeftDoor = door._otype == _object_id::OBJ_L5LDOOR; // otherwise the door is type OBJ_L5RDOOR
 
 	if (isLeftDoor) {
-		ObjSetMicro(door.position, 206);
+		ObjSetMicro(door.position, 205);
 		dSpecial[door.position.x][door.position.y] = 1;
-		SetDoorPiece(door.position + Direction::NorthWest);
 		CryptDoorSet(door.position + Direction::NorthEast, isLeftDoor);
 	} else {
-		ObjSetMicro(door.position, 209);
+		ObjSetMicro(door.position, 208);
 		dSpecial[door.position.x][door.position.y] = 2;
-		SetDoorPiece(door.position + Direction::NorthEast);
 		CryptDoorSet(door.position + Direction::NorthWest, isLeftDoor);
 	}
 }
@@ -4477,11 +4356,11 @@ void AddL1Objs(int x1, int y1, int x2, int y2)
 	for (int j = y1; j < y2; j++) {
 		for (int i = x1; i < x2; i++) {
 			int pn = dPiece[i][j];
-			if (pn == 270)
+			if (pn == 269)
 				AddObject(OBJ_L1LIGHT, { i, j });
-			if (pn == 44 || pn == 51 || pn == 214)
+			if (pn == 43 || pn == 50 || pn == 213)
 				AddObject(OBJ_L1LDOOR, { i, j });
-			if (pn == 46 || pn == 56)
+			if (pn == 45 || pn == 55)
 				AddObject(OBJ_L1RDOOR, { i, j });
 		}
 	}
@@ -4492,9 +4371,9 @@ void AddL2Objs(int x1, int y1, int x2, int y2)
 	for (int j = y1; j < y2; j++) {
 		for (int i = x1; i < x2; i++) {
 			int pn = dPiece[i][j];
-			if (pn == 13 || pn == 541)
+			if (pn == 12 || pn == 540)
 				AddObject(OBJ_L2LDOOR, { i, j });
-			if (pn == 17 || pn == 542)
+			if (pn == 16 || pn == 541)
 				AddObject(OBJ_L2RDOOR, { i, j });
 		}
 	}
@@ -4505,9 +4384,9 @@ void AddL3Objs(int x1, int y1, int x2, int y2)
 	for (int j = y1; j < y2; j++) {
 		for (int i = x1; i < x2; i++) {
 			int pn = dPiece[i][j];
-			if (pn == 531)
+			if (pn == 530)
 				AddObject(OBJ_L3LDOOR, { i, j });
-			if (pn == 534)
+			if (pn == 533)
 				AddObject(OBJ_L3RDOOR, { i, j });
 		}
 	}
@@ -4518,9 +4397,9 @@ void AddCryptObjects(int x1, int y1, int x2, int y2)
 	for (int j = y1; j < y2; j++) {
 		for (int i = x1; i < x2; i++) {
 			int pn = dPiece[i][j];
-			if (pn == 77)
+			if (pn == 76)
 				AddObject(OBJ_L5LDOOR, { i, j });
-			if (pn == 80)
+			if (pn == 79)
 				AddObject(OBJ_L5RDOOR, { i, j });
 		}
 	}
@@ -4569,7 +4448,7 @@ void InitObjects()
 			if (Quests[Q_PWATER].IsAvailable())
 				AddCandles();
 			if (Quests[Q_LTBANNER].IsAvailable())
-				AddObject(OBJ_SIGNCHEST, { 2 * setpc_x + 26, 2 * setpc_y + 19 });
+				AddObject(OBJ_SIGNCHEST, SetPiece.position.megaToWorld() + Displacement { 10, 3 });
 			InitRndLocBigObj(10, 15, OBJ_SARC);
 			AddL1Objs(0, 0, MAXDUNX, MAXDUNY);
 			InitRndBarrels();
@@ -4604,8 +4483,8 @@ void InitObjects()
 					break;
 				}
 				Quests[Q_BLIND]._qmsg = spId;
-				AddBookLever({ { setpc_x, setpc_y }, { setpc_w + 1, setpc_h + 1 } }, spId);
-				LoadMapObjs("Levels\\L2Data\\Blind2.DUN", { 2 * setpc_x, 2 * setpc_y });
+				AddBookLever({ SetPiece.position, { SetPiece.size.width + 1, SetPiece.size.height + 1 } }, spId);
+				LoadMapObjects("Levels\\L2Data\\Blind2.DUN", SetPiece.position.megaToWorld());
 			}
 			if (Quests[Q_BLOOD].IsAvailable()) {
 				_speech_id spId;
@@ -4630,8 +4509,8 @@ void InitObjects()
 					break;
 				}
 				Quests[Q_BLOOD]._qmsg = spId;
-				AddBookLever({ { setpc_x, setpc_y + 3 }, { 2, 4 } }, spId);
-				AddObject(OBJ_PEDISTAL, { 2 * setpc_x + 25, 2 * setpc_y + 32 });
+				AddBookLever({ { SetPiece.position + Displacement { 0, 3 } }, { 2, 4 } }, spId);
+				AddObject(OBJ_PEDISTAL, SetPiece.position.megaToWorld() + Displacement { 9, 16 });
 			}
 			InitRndBarrels();
 		}
@@ -4663,8 +4542,8 @@ void InitObjects()
 					break;
 				}
 				Quests[Q_WARLORD]._qmsg = spId;
-				AddBookLever({ { setpc_x, setpc_y }, { setpc_w, setpc_h } }, spId);
-				LoadMapObjs("Levels\\L4Data\\Warlord.DUN", { 2 * setpc_x, 2 * setpc_y });
+				AddBookLever(SetPiece, spId);
+				LoadMapObjects("Levels\\L4Data\\Warlord.DUN", SetPiece.position.megaToWorld());
 			}
 			if (Quests[Q_BETRAYER].IsAvailable() && !gbIsMultiplayer)
 				AddLazStand();
@@ -4778,7 +4657,7 @@ void AddObject(_object_id objType, Point objPos)
 		InitializeL5Door(object);
 		break;
 	case OBJ_BOOK2R:
-		object.InitializeBook({ { setpc_x, setpc_y }, { setpc_w + 1, setpc_h + 1 } });
+		object.InitializeBook({ SetPiece.position, { SetPiece.size.width + 1, SetPiece.size.height + 1 } });
 		break;
 	case OBJ_CHEST1:
 	case OBJ_CHEST2:
@@ -5040,7 +4919,7 @@ void ProcessObjects()
 void RedoPlayerVision()
 {
 	for (Player &player : Players) {
-		if (player.plractive && currlevel == player.plrlevel) {
+		if (player.plractive && player.isOnActiveLevel()) {
 			ChangeVisionXY(player._pvid, player.position.tile);
 		}
 	}
@@ -5478,7 +5357,7 @@ void SyncObjectAnim(Object &object)
 		SyncQSTLever(object);
 		break;
 	case OBJ_PEDISTAL:
-		SyncPedestal(object, { setpc_x, setpc_y }, setpc_w);
+		SyncPedestal(object, SetPiece.position, SetPiece.size.width);
 		break;
 	default:
 		break;
@@ -5566,7 +5445,7 @@ void GetObjectStr(const Object &object)
 		break;
 	case OBJ_SHRINEL:
 	case OBJ_SHRINER:
-		InfoString = fmt::format(_(/* TRANSLATORS: {:s} will be a name from the Shrine block above */ "{:s} Shrine"), _(ShrineNames[object._oVar1]));
+		InfoString = fmt::format(fmt::runtime(_(/* TRANSLATORS: {:s} will be a name from the Shrine block above */ "{:s} Shrine")), _(ShrineNames[object._oVar1]));
 		break;
 	case OBJ_SKELBOOK:
 		InfoString = _("Skeleton Tome");
@@ -5635,12 +5514,12 @@ void GetObjectStr(const Object &object)
 	}
 	if (MyPlayer->_pClass == HeroClass::Rogue) {
 		if (object._oTrapFlag) {
-			InfoString = fmt::format(_(/* TRANSLATORS: {:s} will either be a chest or a door */ "Trapped {:s}"), InfoString);
+			InfoString = fmt::format(fmt::runtime(_(/* TRANSLATORS: {:s} will either be a chest or a door */ "Trapped {:s}")), InfoString);
 			InfoColor = UiFlags::ColorRed;
 		}
 	}
 	if (object.IsDisabled()) {
-		InfoString = fmt::format(_(/* TRANSLATORS: If user enabled diablo.ini setting "Disable Crippling Shrines" is set to 1; also used for Na-Kruls leaver */ "{:s} (disabled)"), InfoString);
+		InfoString = fmt::format(fmt::runtime(_(/* TRANSLATORS: If user enabled diablo.ini setting "Disable Crippling Shrines" is set to 1; also used for Na-Kruls leaver */ "{:s} (disabled))")), InfoString);
 		InfoColor = UiFlags::ColorRed;
 	}
 }
@@ -5655,12 +5534,10 @@ void OperateNakrulLever()
 
 void SyncNakrulRoom()
 {
-	dPiece[UberRow][UberCol] = 298;
-	dPiece[UberRow][UberCol - 1] = 301;
-	dPiece[UberRow][UberCol - 2] = 300;
-	dPiece[UberRow][UberCol + 1] = 299;
-
-	SetDungeonMicros();
+	dPiece[UberRow][UberCol] = 297;
+	dPiece[UberRow][UberCol - 1] = 300;
+	dPiece[UberRow][UberCol - 2] = 299;
+	dPiece[UberRow][UberCol + 1] = 298;
 }
 
 void AddNakrulLeaver()

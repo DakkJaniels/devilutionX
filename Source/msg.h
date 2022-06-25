@@ -327,34 +327,10 @@ enum _cmd_id : uint8_t {
 	//
 	// body (TCmd)
 	CMD_DEACTIVATEPORTAL,
-	// Delta information for dungeon level 0 through 24.
+	// Delta information for a dungeon level.
 	//
 	// body (TCmdPlrInfoHdr)
-	CMD_DLEVEL_0,
-	CMD_DLEVEL_1,
-	CMD_DLEVEL_2,
-	CMD_DLEVEL_3,
-	CMD_DLEVEL_4,
-	CMD_DLEVEL_5,
-	CMD_DLEVEL_6,
-	CMD_DLEVEL_7,
-	CMD_DLEVEL_8,
-	CMD_DLEVEL_9,
-	CMD_DLEVEL_10,
-	CMD_DLEVEL_11,
-	CMD_DLEVEL_12,
-	CMD_DLEVEL_13,
-	CMD_DLEVEL_14,
-	CMD_DLEVEL_15,
-	CMD_DLEVEL_16,
-	CMD_DLEVEL_17,
-	CMD_DLEVEL_18,
-	CMD_DLEVEL_19,
-	CMD_DLEVEL_20,
-	CMD_DLEVEL_21,
-	CMD_DLEVEL_22,
-	CMD_DLEVEL_23,
-	CMD_DLEVEL_24,
+	CMD_DLEVEL,
 	// Delta information of quest and portal states.
 	//
 	// body (TCmdPlrInfoHdr)
@@ -728,49 +704,6 @@ struct TPkt {
 	TPktHdr hdr;
 	byte body[493];
 };
-
-struct DMonsterStr {
-	uint8_t _mx;
-	uint8_t _my;
-	Direction _mdir;
-	uint8_t _menemy;
-	uint8_t _mactive;
-	int32_t _mhitpoints;
-	int8_t mWhoHit;
-};
-
-struct DObjectStr {
-	_cmd_id bCmd;
-};
-
-struct DLevel {
-	TCmdPItem item[MAXITEMS];
-	DObjectStr object[MAXOBJECTS];
-	DMonsterStr monster[MAXMONSTERS];
-};
-
-struct LocalLevel {
-	uint8_t automapsv[DMAXX][DMAXY];
-};
-
-struct DPortal {
-	uint8_t x;
-	uint8_t y;
-	uint8_t level;
-	uint8_t ltype;
-	uint8_t setlvl;
-};
-
-struct MultiQuests {
-	quest_state qstate;
-	uint8_t qlog;
-	uint8_t qvar1;
-};
-
-struct DJunk {
-	DPortal portal[MAXPORTAL];
-	MultiQuests quests[MAXMULTIQUESTS];
-};
 #pragma pack(pop)
 
 struct TBuffer {
@@ -788,9 +721,12 @@ void run_delta_info();
 void DeltaExportData(int pnum);
 void DeltaSyncJunk();
 void delta_init();
-void delta_kill_monster(int mi, Point position, uint8_t bLevel);
-void delta_monster_hp(int mi, int hp, uint8_t bLevel);
+void delta_kill_monster(int mi, Point position, const Player &player);
+void delta_monster_hp(int mi, int hp, const Player &player);
 void delta_sync_monster(const TSyncMonster &monsterSync, uint8_t level);
+uint8_t GetLevelForMultiplayer(const Player &player);
+bool IsValidLevelForMultiplayer(uint8_t level);
+bool IsValidLevel(uint8_t level, bool isSetLevel);
 void DeltaAddItem(int ii);
 void DeltaSaveLevel();
 void DeltaLoadLevel();

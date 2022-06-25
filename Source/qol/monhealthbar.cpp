@@ -41,10 +41,9 @@ void InitMonsterHealthBar()
 	if ((healthBox.surface == nullptr)
 	    || (health.surface == nullptr)
 	    || (resistance.surface == nullptr)) {
-		app_fatal("%s", _("Failed to load UI resources.\n"
-		                  "\n"
-		                  "Make sure devilutionx.mpq is in the game folder and that it is up to date.")
-		                    .c_str());
+		app_fatal(_("Failed to load UI resources.\n"
+		            "\n"
+		            "Make sure devilutionx.mpq is in the game folder and that it is up to date."));
 	}
 }
 
@@ -80,9 +79,9 @@ void DrawMonsterHealthBar(const Surface &out)
 
 	if (CanPanelsCoverView()) {
 		if (IsRightPanelOpen())
-			position.x -= SPANEL_WIDTH / 2;
+			position.x -= SidePanelSize.width / 2;
 		if (IsLeftPanelOpen())
-			position.x += SPANEL_WIDTH / 2;
+			position.x += SidePanelSize.width / 2;
 	}
 
 	const int border = 3;

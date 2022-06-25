@@ -52,9 +52,9 @@ set(devilutionx_assets
   data/hintbox.pcx
   data/hintboxbackground.pcx
   data/hinticons.pcx
+  data/monstertags.pcx
   data/panel8buc.pcx
   data/panel8bucp.pcx
-  data/monstertags.pcx
   data/resistance.pcx
   data/stash.pcx
   data/stashnavbtns.pcx
@@ -157,7 +157,12 @@ set(devilutionx_assets
   gendata/cutportlw.pcx
   gendata/cutportrw.pcx
   gendata/cutstartw.pcx
+  Levels/L1Data/SklKngT.dun
+  Levels/L2Data/BonechaT.dun
+  ui_art/black.pcx
   ui_art/creditsw.pcx
+  ui_art/dvl_but_sml.pcx
+  ui_art/dvl_lrpopup.pcx
   ui_art/hf_titlew.pcx
   ui_art/mainmenuw.pcx
   ui_art/supportw.pcx)

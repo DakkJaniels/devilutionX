@@ -13,12 +13,12 @@
 #include "engine/actor_position.hpp"
 #include "engine/animationinfo.h"
 #include "engine/cel_sprite.hpp"
+#include "engine/path.h"
 #include "engine/point.hpp"
-#include "gendung.h"
 #include "interfac.h"
 #include "items.h"
+#include "levels/gendung.h"
 #include "multi.h"
-#include "path.h"
 #include "spelldat.h"
 #include "utils/attributes.h"
 #include "utils/enum_traits.h"
@@ -215,7 +215,7 @@ struct Player {
 	Player &operator=(Player &&) noexcept = default;
 
 	PLR_MODE _pmode;
-	int8_t walkpath[MAX_PATH_LENGTH];
+	int8_t walkpath[MaxPathLength];
 	bool plractive;
 	action_id destAction;
 	int destParam1;
@@ -223,6 +223,7 @@ struct Player {
 	int destParam3;
 	int destParam4;
 	uint8_t plrlevel;
+	bool plrIsOnSetLevel;
 	ActorPosition position;
 	Direction _pdir; // Direction faced by player (direction enum)
 	int _pgfxnum;    // Bitmask indicating what variant of the sprite the player is using. Lower byte define weapon (PlayerWeaponGraphic) and higher values define armour (starting with PlayerArmorGraphic)
@@ -709,6 +710,35 @@ struct Player {
 	 * @param wParam2 Second Parameter
 	 */
 	void UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1, uint16_t wParam2);
+
+	/** @brief Checks if the player is on the same level as the local player (MyPlayer). */
+	bool isOnActiveLevel() const
+	{
+		if (setlevel)
+			return isOnLevel(setlvlnum);
+		return isOnLevel(currlevel);
+	}
+
+	/** @brief Checks if the player is on the correspondig level. */
+	bool isOnLevel(uint8_t level) const
+	{
+		return !this->plrIsOnSetLevel && this->plrlevel == level;
+	}
+	/** @brief Checks if the player is on the correspondig level. */
+	bool isOnLevel(_setlevels level) const
+	{
+		return this->plrIsOnSetLevel && this->plrlevel == static_cast<uint8_t>(level);
+	}
+	void setLevel(uint8_t level)
+	{
+		this->plrlevel = level;
+		this->plrIsOnSetLevel = false;
+	}
+	void setLevel(_setlevels level)
+	{
+		this->plrlevel = static_cast<uint8_t>(level);
+		this->plrIsOnSetLevel = true;
+	}
 };
 
 extern DVL_API_FOR_TEST int MyPlayerId;

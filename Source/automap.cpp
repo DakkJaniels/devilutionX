@@ -9,11 +9,11 @@
 
 #include "control.h"
 #include "engine/load_file.hpp"
+#include "engine/palette.h"
 #include "engine/render/automap_render.hpp"
-#include "gendung.h"
-#include "palette.h"
+#include "levels/gendung.h"
+#include "levels/setmaps.h"
 #include "player.h"
-#include "setmaps.h"
 #include "utils/language.h"
 #include "utils/stdcompat/algorithm.hpp"
 #include "utils/ui_fwd.h"
@@ -480,7 +480,7 @@ void DrawAutomapText(const Surface &out)
 
 	if (gbIsMultiplayer) {
 		if (strcasecmp("0.0.0.0", szPlayerName) != 0) {
-			std::string description = _("Game: ");
+			std::string description = std::string(_("Game: "));
 			description.append(szPlayerName);
 			DrawString(out, description, linePosition);
 			linePosition.y += 15;
@@ -488,10 +488,10 @@ void DrawAutomapText(const Surface &out)
 
 		std::string description;
 		if (!PublicGame) {
-			description = _("Password: ");
+			description = std::string(_("Password: "));
 			description.append(szPlayerDescript);
 		} else {
-			description = _("Public Game");
+			description = std::string(_("Public Game"));
 		}
 		DrawString(out, description, linePosition);
 		linePosition.y += 15;
@@ -506,13 +506,13 @@ void DrawAutomapText(const Surface &out)
 		std::string description;
 		switch (leveltype) {
 		case DTYPE_NEST:
-			description = fmt::format(_("Level: Nest {:d}"), currlevel - 16);
+			description = fmt::format(fmt::runtime(_("Level: Nest {:d}")), currlevel - 16);
 			break;
 		case DTYPE_CRYPT:
-			description = fmt::format(_("Level: Crypt {:d}"), currlevel - 20);
+			description = fmt::format(fmt::runtime(_("Level: Crypt {:d}")), currlevel - 20);
 			break;
 		default:
-			description = fmt::format(_("Level: {:d}"), currlevel);
+			description = fmt::format(fmt::runtime(_("Level: {:d}")), currlevel);
 			break;
 		}
 
@@ -532,7 +532,7 @@ void DrawAutomapText(const Surface &out)
 		break;
 	}
 
-	std::string description = fmt::format(_(/* TRANSLATORS: {:s} means: Game Difficulty. */ "Difficulty: {:s}"), difficulty);
+	std::string description = fmt::format(fmt::runtime(_(/* TRANSLATORS: {:s} means: Game Difficulty. */ "Difficulty: {:s}")), difficulty);
 	DrawString(out, description, linePosition);
 }
 
@@ -737,7 +737,7 @@ void DrawAutomap(const Surface &out)
 
 	for (int playerId = 0; playerId < MAX_PLRS; playerId++) {
 		Player &player = Players[playerId];
-		if (player.plrlevel == myPlayer.plrlevel && player.plractive && !player._pLvlChanging && (&player == &myPlayer || player.friendlyMode)) {
+		if (player.isOnActiveLevel() && player.plractive && !player._pLvlChanging && (&player == &myPlayer || player.friendlyMode)) {
 			DrawAutomapPlr(out, myPlayerOffset, playerId);
 		}
 	}

@@ -12,6 +12,7 @@
 #include "panels/ui_panels.hpp"
 #include "player.h"
 #include "utils/display.h"
+#include "utils/format_int.hpp"
 #include "utils/language.h"
 
 namespace devilution {
@@ -125,18 +126,22 @@ PanelEntry panelEntries[] = {
 	{ "", { 9, 14 }, 150, 0,
 	    []() { return StyledText { UiFlags::ColorWhite, MyPlayer->_pName }; } },
 	{ "", { 161, 14 }, 149, 0,
-	    []() { return StyledText { UiFlags::ColorWhite, _(ClassStrTbl[static_cast<std::size_t>(MyPlayer->_pClass)]) }; } },
+	    []() { return StyledText { UiFlags::ColorWhite, std::string(_(ClassStrTbl[static_cast<std::size_t>(MyPlayer->_pClass)])) }; } },
 
 	{ N_("Level"), { 57, 52 }, 57, 45,
 	    []() { return StyledText { UiFlags::ColorWhite, fmt::format("{:d}", MyPlayer->_pLevel) }; } },
 	{ N_("Experience"), { TopRightLabelX, 52 }, 99, 91,
-	    []() { return StyledText { UiFlags::ColorWhite, fmt::format("{:d}", MyPlayer->_pExperience) }; } },
+	    []() {
+	        int spacing = ((MyPlayer->_pExperience >= 1000000000) ? 0 : 1);
+	        return StyledText { UiFlags::ColorWhite, fmt::format("{:s}", FormatInteger(MyPlayer->_pExperience)), spacing };
+	    } },
 	{ N_("Next level"), { TopRightLabelX, 80 }, 99, 198,
 	    []() {
 	        if (MyPlayer->_pLevel == MAXCHARLEVEL) {
-		        return StyledText { UiFlags::ColorWhitegold, _("None") };
+		        return StyledText { UiFlags::ColorWhitegold, std::string(_("None")) };
 	        }
-	        return StyledText { UiFlags::ColorWhite, fmt::format("{:d}", MyPlayer->_pNextExper) };
+	        int spacing = ((MyPlayer->_pNextExper >= 1000000000) ? 0 : 1);
+	        return StyledText { UiFlags::ColorWhite, fmt::format("{:s}", FormatInteger(MyPlayer->_pNextExper)), spacing };
 	    } },
 
 	{ N_("Base"), { LeftColumnLabelX, /* set dynamically */ 0 }, 0, 44 },
@@ -163,7 +168,7 @@ PanelEntry panelEntries[] = {
 
 	{ N_("Gold"), { TopRightLabelX, /* set dynamically */ 0 }, 0, 98 },
 	{ "", { TopRightLabelX, 127 }, 99, 0,
-	    []() { return StyledText { UiFlags::ColorWhite, fmt::format("{:d}", MyPlayer->_pGold) }; } },
+	    []() { return StyledText { UiFlags::ColorWhite, fmt::format("{:s}", FormatInteger(MyPlayer->_pGold)) }; } },
 
 	{ N_("Armor class"), { RightColumnLabelX, 163 }, 57, RightColumnLabelWidth,
 	    []() { return StyledText { GetValueColor(MyPlayer->_pIBonusAC), fmt::format("{:d}", MyPlayer->GetArmor()) }; } },
@@ -219,7 +224,7 @@ void DrawShadowString(const Surface &out, const PanelEntry &entry)
 		return;
 
 	constexpr int Spacing = 0;
-	const std::string &textStr = LanguageTranslate(entry.label.c_str());
+	const string_view textStr = LanguageTranslate(entry.label);
 	string_view text;
 	std::string wrapped;
 	if (entry.labelLength > 0) {
@@ -247,14 +252,15 @@ void DrawShadowString(const Surface &out, const PanelEntry &entry)
 void DrawStatButtons(const Surface &out)
 {
 	if (MyPlayer->_pStatPts > 0) {
+		CelSprite sprite { *pChrButtons };
 		if (MyPlayer->_pBaseStr < MyPlayer->GetMaximumAttributeValue(CharacterAttribute::Strength))
-			CelDrawTo(out, GetPanelPosition(UiPanels::Character, { 137, 157 }), *pChrButtons, chrbtn[static_cast<size_t>(CharacterAttribute::Strength)] ? 2 : 1);
+			CelDrawTo(out, GetPanelPosition(UiPanels::Character, { 137, 157 }), sprite, chrbtn[static_cast<size_t>(CharacterAttribute::Strength)] ? 2 : 1);
 		if (MyPlayer->_pBaseMag < MyPlayer->GetMaximumAttributeValue(CharacterAttribute::Magic))
-			CelDrawTo(out, GetPanelPosition(UiPanels::Character, { 137, 185 }), *pChrButtons, chrbtn[static_cast<size_t>(CharacterAttribute::Magic)] ? 4 : 3);
+			CelDrawTo(out, GetPanelPosition(UiPanels::Character, { 137, 185 }), sprite, chrbtn[static_cast<size_t>(CharacterAttribute::Magic)] ? 4 : 3);
 		if (MyPlayer->_pBaseDex < MyPlayer->GetMaximumAttributeValue(CharacterAttribute::Dexterity))
-			CelDrawTo(out, GetPanelPosition(UiPanels::Character, { 137, 214 }), *pChrButtons, chrbtn[static_cast<size_t>(CharacterAttribute::Dexterity)] ? 6 : 5);
+			CelDrawTo(out, GetPanelPosition(UiPanels::Character, { 137, 214 }), sprite, chrbtn[static_cast<size_t>(CharacterAttribute::Dexterity)] ? 6 : 5);
 		if (MyPlayer->_pBaseVit < MyPlayer->GetMaximumAttributeValue(CharacterAttribute::Vitality))
-			CelDrawTo(out, GetPanelPosition(UiPanels::Character, { 137, 242 }), *pChrButtons, chrbtn[static_cast<size_t>(CharacterAttribute::Vitality)] ? 8 : 7);
+			CelDrawTo(out, GetPanelPosition(UiPanels::Character, { 137, 242 }), sprite, chrbtn[static_cast<size_t>(CharacterAttribute::Vitality)] ? 8 : 7);
 	}
 }
 

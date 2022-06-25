@@ -38,13 +38,13 @@ void InitPortals()
 	}
 }
 
-void SetPortalStats(int i, bool o, int x, int y, int lvl, dungeon_type lvltype)
+void SetPortalStats(int i, bool o, int x, int y, int lvl, dungeon_type lvltype, bool isSetLevel)
 {
 	Portals[i].open = o;
 	Portals[i].position = { x, y };
 	Portals[i].level = lvl;
 	Portals[i].ltype = lvltype;
-	Portals[i].setlvl = false;
+	Portals[i].setlvl = isSetLevel;
 }
 
 void AddWarpMissile(int i, Point position)
@@ -134,7 +134,7 @@ void GetPortalLevel()
 	if (leveltype != DTYPE_TOWN) {
 		setlevel = false;
 		currlevel = 0;
-		MyPlayer->plrlevel = 0;
+		MyPlayer->setLevel(0);
 		leveltype = DTYPE_TOWN;
 		return;
 	}
@@ -143,12 +143,12 @@ void GetPortalLevel()
 		setlevel = true;
 		setlvlnum = (_setlevels)Portals[portalindex].level;
 		currlevel = Portals[portalindex].level;
-		MyPlayer->plrlevel = setlvlnum;
+		MyPlayer->setLevel(setlvlnum);
 		leveltype = Portals[portalindex].ltype;
 	} else {
 		setlevel = false;
 		currlevel = Portals[portalindex].level;
-		MyPlayer->plrlevel = currlevel;
+		MyPlayer->setLevel(currlevel);
 		leveltype = Portals[portalindex].ltype;
 	}
 

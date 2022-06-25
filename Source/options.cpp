@@ -10,17 +10,18 @@
 #include <fmt/format.h>
 
 #define SI_SUPPORT_IOSTREAMS
+#define SI_NO_CONVERSION
 #include <SimpleIni.h>
 
 #include "control.h"
 #include "discord/discord.h"
 #include "engine/demomode.h"
+#include "engine/sound_defs.hpp"
 #include "hwcursor.hpp"
 #include "options.h"
 #include "platform/locale.hpp"
 #include "qol/monhealthbar.h"
 #include "qol/xpbar.h"
-#include "sound_defs.hpp"
 #include "utils/display.h"
 #include "utils/file_util.h"
 #include "utils/language.h"
@@ -394,11 +395,11 @@ void SaveOptions()
 
 string_view OptionEntryBase::GetName() const
 {
-	return _(name.data());
+	return _(name);
 }
 string_view OptionEntryBase::GetDescription() const
 {
-	return _(description.data());
+	return _(description);
 }
 OptionEntryFlags OptionEntryBase::GetFlags() const
 {
@@ -544,11 +545,11 @@ string_view OptionCategoryBase::GetKey() const
 }
 string_view OptionCategoryBase::GetName() const
 {
-	return _(name.data());
+	return _(name);
 }
 string_view OptionCategoryBase::GetDescription() const
 {
-	return _(description.data());
+	return _(description);
 }
 
 StartUpOptions::StartUpOptions()
@@ -847,7 +848,7 @@ size_t OptionEntryAudioDevice::GetListSize() const
 
 string_view OptionEntryAudioDevice::GetListDescription(size_t index) const
 {
-	constexpr size_t MaxWidth = 500;
+	constexpr int MaxWidth = 500;
 
 	string_view deviceName = GetDeviceName(index);
 	if (deviceName.empty())
@@ -1098,7 +1099,7 @@ void OptionEntryLanguageCode::LoadFromIni(string_view category)
 		}
 	}
 
-	LogVerbose("Found {} user preferred locales", locales);
+	LogVerbose("Found user preferred locales: {}", fmt::join(locales, ", "));
 
 	for (const auto &locale : locales) {
 		LogVerbose("Trying to load translation: {}", locale);
@@ -1244,7 +1245,7 @@ KeymapperOptions::Action::Action(string_view key, string_view name, string_view 
     , dynamicIndex(index)
 {
 	if (index != 0) {
-		dynamicKey = fmt::format(fmt::string_view(key.data(), key.size()), index);
+		dynamicKey = fmt::format(fmt::runtime(fmt::string_view(key.data(), key.size())), index);
 		this->key = dynamicKey;
 	}
 }
@@ -1252,8 +1253,8 @@ KeymapperOptions::Action::Action(string_view key, string_view name, string_view 
 string_view KeymapperOptions::Action::GetName() const
 {
 	if (dynamicIndex == 0)
-		return _(name.data());
-	dynamicName = fmt::format(_(name.data()), dynamicIndex);
+		return _(name);
+	dynamicName = fmt::format(fmt::runtime(_(name)), dynamicIndex);
 	return dynamicName;
 }
 

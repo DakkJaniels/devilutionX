@@ -296,7 +296,7 @@ bool PlrDirOK(const Player &player, Direction dir)
 {
 	Point position = player.position.tile;
 	Point futurePosition = position + dir;
-	if (futurePosition.x < 0 || dPiece[futurePosition.x][futurePosition.y] == 0 || !PosOkPlayer(player, futurePosition)) {
+	if (futurePosition.x < 0 || !PosOkPlayer(player, futurePosition)) {
 		return false;
 	}
 
@@ -1563,11 +1563,11 @@ void CheckNewPath(int pnum, bool pmWillBeCalled)
 				break;
 			}
 
-			for (int j = 1; j < MAX_PATH_LENGTH; j++) {
+			for (size_t j = 1; j < MaxPathLength; j++) {
 				player.walkpath[j - 1] = player.walkpath[j];
 			}
 
-			player.walkpath[MAX_PATH_LENGTH - 1] = WALK_NONE;
+			player.walkpath[MaxPathLength - 1] = WALK_NONE;
 
 			if (player._pmode == PM_STAND) {
 				StartStand(pnum, player._pdir);
@@ -2160,7 +2160,7 @@ void Player::UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1
 	}
 
 	if (minimalWalkDistance >= 0 && position.future != point) {
-		int8_t testWalkPath[MAX_PATH_LENGTH];
+		int8_t testWalkPath[MaxPathLength];
 		int steps = FindPath([this](Point position) { return PosOkPlayer(*this, position); }, position.future, point, testWalkPath);
 		if (steps == 0) {
 			// Can't walk to desired location => stand still
@@ -2317,6 +2317,8 @@ void LoadPlrGFX(Player &player, player_graphic graphic)
 		case PlayerWeaponGraphic::SwordShield:
 		case PlayerWeaponGraphic::MaceShield:
 			animWeaponId = PlayerWeaponGraphic::UnarmedShield;
+			break;
+		default:
 			break;
 		}
 	}
@@ -2782,7 +2784,7 @@ void InitPlayer(Player &player, bool firstTime)
 		player.wReflections = 0;
 	}
 
-	if (player.plrlevel == currlevel) {
+	if (player.isOnActiveLevel()) {
 
 		SetPlrAnims(player);
 
@@ -3084,7 +3086,7 @@ StartPlayerKill(int pnum, int earflag)
 		CalcPlrInv(player, false);
 	}
 
-	if (player.plrlevel == currlevel) {
+	if (player.isOnActiveLevel()) {
 		FixPlayerLocation(pnum, player._pdir);
 		RemovePlrFromMap(pnum);
 		dFlags[player.position.tile.x][player.position.tile.y] |= DungeonFlag::DeadPlayer;
@@ -3104,7 +3106,7 @@ StartPlayerKill(int pnum, int earflag)
 					if (earflag != 0) {
 						Item ear;
 						InitializeItem(ear, IDI_EAR);
-						CopyUtf8(ear._iName, fmt::format(_("Ear of {:s}"), player._pName), sizeof(ear._iName));
+						CopyUtf8(ear._iName, fmt::format(fmt::runtime(_("Ear of {:s}")), player._pName), sizeof(ear._iName));
 						CopyUtf8(ear._iIName, player._pName, sizeof(ear._iIName));
 						switch (player._pClass) {
 						case HeroClass::Sorcerer:
@@ -3263,14 +3265,15 @@ StartNewLvl(int pnum, interface_mode fom, int lvl)
 	case WM_DIABPREVLVL:
 	case WM_DIABRTNLVL:
 	case WM_DIABTOWNWARP:
-		player.plrlevel = lvl;
+		player.setLevel(lvl);
 		break;
 	case WM_DIABSETLVL:
 		setlvlnum = (_setlevels)lvl;
+		player.setLevel(setlvlnum);
 		break;
 	case WM_DIABTWARPUP:
 		myPlayer.pTownWarps |= 1 << (leveltype - 2);
-		player.plrlevel = lvl;
+		player.setLevel(lvl);
 		break;
 	case WM_DIABRETOWN:
 		break;
@@ -3296,7 +3299,7 @@ void RestartTownLvl(int pnum)
 	}
 	Player &player = Players[pnum];
 
-	player.plrlevel = 0;
+	player.setLevel(0);
 	player._pInvincible = false;
 
 	SetPlayerHitPoints(player, 64);
@@ -3320,10 +3323,13 @@ void StartWarpLvl(int pnum, int pidx)
 	InitLevelChange(pnum);
 
 	if (gbIsMultiplayer) {
-		if (player.plrlevel != 0) {
-			player.plrlevel = 0;
+		if (!player.isOnLevel(0)) {
+			player.setLevel(0);
 		} else {
-			player.plrlevel = Portals[pidx].level;
+			if (Portals[pidx].setlvl)
+				player.setLevel(static_cast<_setlevels>(Portals[pidx].level));
+			else
+				player.setLevel(Portals[pidx].level);
 		}
 	}
 
@@ -3372,7 +3378,7 @@ void ProcessPlayers()
 
 	for (int pnum = 0; pnum < MAX_PLRS; pnum++) {
 		Player &player = Players[pnum];
-		if (player.plractive && currlevel == player.plrlevel && (pnum == MyPlayerId || !player._pLvlChanging)) {
+		if (player.plractive && player.isOnActiveLevel() && (pnum == MyPlayerId || !player._pLvlChanging)) {
 			CheckCheatStats(player);
 
 			if (!PlrDeathModeOK(pnum) && (player._pHitPoints >> 6) <= 0) {
@@ -3447,8 +3453,6 @@ void ClrPlrPath(Player &player)
 bool PosOkPlayer(const Player &player, Point position)
 {
 	if (!InDungeonBounds(position))
-		return false;
-	if (dPiece[position.x][position.y] == 0)
 		return false;
 	if (!IsTileWalkable(position))
 		return false;
@@ -3526,12 +3530,12 @@ void CheckPlrSpell(bool isShiftHeld, spell_id spellID, spell_type spellType)
 		if (pcurs != CURSOR_HAND)
 			return;
 
-		if (GetMainPanel().Contains(MousePosition)) // inside main panel
+		if (GetMainPanel().contains(MousePosition)) // inside main panel
 			return;
 
 		if (
-		    (IsLeftPanelOpen() && GetLeftPanel().Contains(MousePosition))      // inside left panel
-		    || (IsRightPanelOpen() && GetRightPanel().Contains(MousePosition)) // inside right panel
+		    (IsLeftPanelOpen() && GetLeftPanel().contains(MousePosition))      // inside left panel
+		    || (IsRightPanelOpen() && GetRightPanel().contains(MousePosition)) // inside right panel
 		) {
 			if (spellID != SPL_HEAL
 			    && spellID != SPL_IDENTIFY
@@ -3657,7 +3661,7 @@ void SyncInitPlrPos(int pnum)
 {
 	Player &player = Players[pnum];
 
-	if (!gbIsMultiplayer || player.plrlevel != currlevel) {
+	if (!gbIsMultiplayer || !player.isOnActiveLevel()) {
 		return;
 	}
 

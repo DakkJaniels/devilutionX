@@ -18,12 +18,12 @@
 #include "engine/render/cel_render.hpp"
 #include "hwcursor.hpp"
 #include "inv.h"
+#include "levels/trigs.h"
 #include "missiles.h"
 #include "qol/itemlabels.h"
 #include "qol/stash.h"
 #include "towners.h"
 #include "track.h"
-#include "trigs.h"
 #include "utils/attributes.h"
 #include "utils/language.h"
 #include "utils/utf8.hpp"
@@ -195,7 +195,7 @@ void NewCursor(int cursId)
 
 void CelDrawCursor(const Surface &out, Point position, int cursId)
 {
-	const auto &sprite = GetInvItemSprite(cursId);
+	const CelSprite sprite { GetInvItemSprite(cursId) };
 	const int frame = GetInvItemFrame(cursId);
 	if (!MyPlayer->HoldItem.isEmpty()) {
 		const auto &heldItem = MyPlayer->HoldItem;
@@ -227,7 +227,7 @@ void CheckTown()
 				trigflag = true;
 				ClearPanel();
 				InfoString = _("Town Portal");
-				AddPanelString(fmt::format(_("from {:s}"), Players[missile._misource]._pName));
+				AddPanelString(fmt::format(fmt::runtime(_("from {:s}")), Players[missile._misource]._pName));
 				cursPosition = missile.position.tile;
 			}
 		}
@@ -265,7 +265,7 @@ void CheckCursMove()
 		}
 	}
 	const Rectangle &mainPanel = GetMainPanel();
-	if (mainPanel.Contains(MousePosition) && track_isscrolling()) {
+	if (mainPanel.contains(MousePosition) && track_isscrolling()) {
 		sy = mainPanel.position.y - 1;
 	}
 
@@ -379,24 +379,24 @@ void CheckCursMove()
 		cursPosition = { mx, my };
 		return;
 	}
-	if (mainPanel.Contains(MousePosition)) {
+	if (mainPanel.contains(MousePosition)) {
 		CheckPanelInfo();
 		return;
 	}
 	if (DoomFlag) {
 		return;
 	}
-	if (invflag && GetRightPanel().Contains(MousePosition)) {
+	if (invflag && GetRightPanel().contains(MousePosition)) {
 		pcursinvitem = CheckInvHLight();
 		return;
 	}
-	if (IsStashOpen && GetLeftPanel().Contains(MousePosition)) {
+	if (IsStashOpen && GetLeftPanel().contains(MousePosition)) {
 		pcursstashitem = CheckStashHLight(MousePosition);
 	}
-	if (sbookflag && GetRightPanel().Contains(MousePosition)) {
+	if (sbookflag && GetRightPanel().contains(MousePosition)) {
 		return;
 	}
-	if (IsLeftPanelOpen() && GetLeftPanel().Contains(MousePosition)) {
+	if (IsLeftPanelOpen() && GetLeftPanel().contains(MousePosition)) {
 		return;
 	}
 

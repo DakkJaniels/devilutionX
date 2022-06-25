@@ -670,11 +670,11 @@ void DoVision(Point position, int nRadius, MapExplorationType doautomap, bool vi
 					break;
 				}
 				if (InDungeonBounds({ nCrawlX, nCrawlY })) {
-					nBlockerFlag = nBlockTable[dPiece[nCrawlX][nCrawlY]];
+					nBlockerFlag = TileHasAny(dPiece[nCrawlX][nCrawlY], TileProperties::BlockLight);
 					if ((InDungeonBounds({ x1adj + nCrawlX, y1adj + nCrawlY })
-					        && !nBlockTable[dPiece[x1adj + nCrawlX][y1adj + nCrawlY]])
+					        && !TileHasAny(dPiece[x1adj + nCrawlX][y1adj + nCrawlY], TileProperties::BlockLight))
 					    || (InDungeonBounds({ x2adj + nCrawlX, y2adj + nCrawlY })
-					        && !nBlockTable[dPiece[x2adj + nCrawlX][y2adj + nCrawlY]])) {
+					        && !TileHasAny(dPiece[x2adj + nCrawlX][y2adj + nCrawlY], TileProperties::BlockLight))) {
 						if (doautomap != MAP_EXP_NONE) {
 							if (dFlags[nCrawlX][nCrawlY] != DungeonFlag::None) {
 								SetAutomapView({ nCrawlX, nCrawlY }, doautomap);
@@ -895,7 +895,7 @@ void ToggleLighting()
 
 	memcpy(dLight, dPreLight, sizeof(dLight));
 	for (const Player &player : Players) {
-		if (player.plractive && player.plrlevel == currlevel) {
+		if (player.plractive && player.isOnActiveLevel()) {
 			DoLighting(player.position.tile, player._pLightRad, -1);
 		}
 	}
@@ -1136,7 +1136,7 @@ void ProcessVisionList()
 			doautomap = MAP_EXP_OTHERS;
 			for (const Player &player : Players) {
 				// Find player for this vision
-				if (!player.plractive || player.plrlevel != currlevel || player._pvid != vision._lid)
+				if (!player.plractive || !player.isOnActiveLevel() || player._pvid != vision._lid)
 					continue;
 				// Check that player allows automap sharing
 				if (!player.friendlyMode)

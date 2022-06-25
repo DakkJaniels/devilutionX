@@ -5,7 +5,7 @@
  */
 #include <climits>
 
-#include "gendung.h"
+#include "levels/gendung.h"
 #include "monster.h"
 #include "player.h"
 
@@ -260,7 +260,7 @@ uint32_t sync_all_monsters(byte *pbBuf, uint32_t dwMaxLen)
 	dwMaxLen -= sizeof(TSyncHeader);
 
 	pHdr->bCmd = CMD_SYNCDATA;
-	pHdr->bLevel = currlevel;
+	pHdr->bLevel = GetLevelForMultiplayer(*MyPlayer);
 	pHdr->wLen = 0;
 	SyncPlrInv(pHdr);
 	assert(dwMaxLen <= 0xffff);
@@ -304,14 +304,14 @@ uint32_t OnSyncData(const TCmd *pCmd, int pnum)
 
 	uint8_t level = header.bLevel;
 
-	if (level < NUMLEVELS) {
+	if (IsValidLevelForMultiplayer(level)) {
 		const auto *monsterSyncs = reinterpret_cast<const TSyncMonster *>(pCmd + sizeof(header));
 
 		for (int i = 0; i < monsterCount; i++) {
 			if (!IsTSyncMonsterValidate(monsterSyncs[i]))
 				continue;
 
-			if (currlevel == level) {
+			if (GetLevelForMultiplayer(*MyPlayer) == level) {
 				SyncMonster(pnum, monsterSyncs[i]);
 			}
 

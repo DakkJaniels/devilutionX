@@ -8,9 +8,9 @@
 
 #include "DiabloUI/ui_flags.hpp"
 #include "control.h"
-#include "dx.h"
 #include "engine.h"
 #include "engine/cel_sprite.hpp"
+#include "engine/dx.h"
 #include "engine/load_cel.hpp"
 #include "engine/render/cel_render.hpp"
 #include "engine/render/text_render.hpp"
@@ -146,7 +146,7 @@ void InitQTextMsg(_speech_id m)
 void DrawQTextBack(const Surface &out)
 {
 	const Point uiPosition = GetUIRectangle().position;
-	CelDrawTo(out, uiPosition + Displacement { 24, 327 }, *pTextBoxCels, 0);
+	CelDrawTo(out, uiPosition + Displacement { 24, 327 }, CelSprite { *pTextBoxCels }, 0);
 	DrawHalfTransparentRectTo(out, uiPosition.x + 27, uiPosition.y + 28, 585, 297);
 }
 

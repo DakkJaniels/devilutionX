@@ -24,24 +24,29 @@
 #include "diablo.h"
 #include "discord/discord.h"
 #include "doom.h"
-#include "drlg_l1.h"
-#include "drlg_l2.h"
-#include "drlg_l3.h"
-#include "drlg_l4.h"
-#include "dx.h"
 #include "encrypt.h"
 #include "engine/cel_sprite.hpp"
 #include "engine/demomode.h"
+#include "engine/dx.h"
 #include "engine/load_cel.hpp"
 #include "engine/load_file.hpp"
 #include "engine/random.hpp"
+#include "engine/sound.h"
 #include "error.h"
 #include "gamemenu.h"
-#include "gendung.h"
 #include "gmenu.h"
 #include "help.h"
 #include "hwcursor.hpp"
 #include "init.h"
+#include "levels/drlg_l1.h"
+#include "levels/drlg_l2.h"
+#include "levels/drlg_l3.h"
+#include "levels/drlg_l4.h"
+#include "levels/gendung.h"
+#include "levels/setmaps.h"
+#include "levels/themes.h"
+#include "levels/town.h"
+#include "levels/trigs.h"
 #include "lighting.h"
 #include "loadsave.h"
 #include "menu.h"
@@ -63,16 +68,11 @@
 #include "qol/stash.h"
 #include "qol/xpbar.h"
 #include "restrict.h"
-#include "setmaps.h"
-#include "sound.h"
 #include "stores.h"
 #include "storm/storm_net.hpp"
 #include "storm/storm_svid.h"
-#include "themes.h"
-#include "town.h"
 #include "towners.h"
 #include "track.h"
-#include "trigs.h"
 #include "utils/console.h"
 #include "utils/display.h"
 #include "utils/language.h"
@@ -218,7 +218,7 @@ void LeftMouseCmd(bool bShift)
 {
 	bool bNear;
 
-	assert(!GetMainPanel().Contains(MousePosition));
+	assert(!GetMainPanel().contains(MousePosition));
 
 	if (leveltype == DTYPE_TOWN) {
 		CloseGoldWithdraw();
@@ -322,27 +322,27 @@ void LeftMouseDown(int wParam)
 	bool isShiftHeld = (wParam & DVL_MK_SHIFT) != 0;
 	bool isCtrlHeld = (wParam & DVL_MK_CTRL) != 0;
 
-	if (!GetMainPanel().Contains(MousePosition)) {
+	if (!GetMainPanel().contains(MousePosition)) {
 		if (!gmenu_is_active() && !TryIconCurs()) {
-			if (QuestLogIsOpen && GetLeftPanel().Contains(MousePosition)) {
+			if (QuestLogIsOpen && GetLeftPanel().contains(MousePosition)) {
 				QuestlogESC();
 			} else if (qtextflag) {
 				qtextflag = false;
 				stream_stop();
-			} else if (chrflag && GetLeftPanel().Contains(MousePosition)) {
+			} else if (chrflag && GetLeftPanel().contains(MousePosition)) {
 				CheckChrBtns();
-			} else if (invflag && GetRightPanel().Contains(MousePosition)) {
+			} else if (invflag && GetRightPanel().contains(MousePosition)) {
 				if (!dropGoldFlag)
 					CheckInvItem(isShiftHeld, isCtrlHeld);
-			} else if (IsStashOpen && GetLeftPanel().Contains(MousePosition)) {
+			} else if (IsStashOpen && GetLeftPanel().contains(MousePosition)) {
 				if (!IsWithdrawGoldOpen)
 					CheckStashItem(MousePosition, isShiftHeld, isCtrlHeld);
 				CheckStashButtonPress(MousePosition);
-			} else if (sbookflag && GetRightPanel().Contains(MousePosition)) {
+			} else if (sbookflag && GetRightPanel().contains(MousePosition)) {
 				CheckSBook();
 			} else if (!MyPlayer->HoldItem.isEmpty()) {
 				Point currentPosition = MyPlayer->position.tile;
-				if (CanPut(currentPosition, GetDirection(currentPosition, cursPosition))) {
+				if (FindAdjacentPositionForItem(currentPosition, GetDirection(currentPosition, cursPosition))) {
 					NetSendCmdPItem(true, CMD_PUTITEM, cursPosition, MyPlayer->HoldItem);
 					NewCursor(CURSOR_HAND);
 				}
@@ -396,7 +396,7 @@ void RightMouseDown(bool isShiftHeld)
 		SetSpell();
 		return;
 	}
-	if (sbookflag && GetRightPanel().Contains(MousePosition))
+	if (sbookflag && GetRightPanel().contains(MousePosition))
 		return;
 	if (TryIconCurs())
 		return;
@@ -796,7 +796,7 @@ void RunGameLoop(interface_mode uMsg)
 	demo::NotifyGameLoopEnd();
 
 	if (gbIsMultiplayer) {
-		pfile_write_hero(/*writeGameData=*/false, /*clearTables=*/true);
+		pfile_write_hero(/*writeGameData=*/false);
 		sfile_write_stash();
 	}
 
@@ -992,7 +992,7 @@ void DiabloInitScreen()
 void SetApplicationVersions()
 {
 	snprintf(gszProductName, sizeof(gszProductName) / sizeof(char), "%s v%s", PROJECT_NAME, PROJECT_VERSION);
-	CopyUtf8(gszVersionNumber, fmt::format(_("version {:s}"), PROJECT_VERSION), sizeof(gszVersionNumber) / sizeof(char));
+	CopyUtf8(gszVersionNumber, fmt::format(fmt::runtime(_("version {:s}")), PROJECT_VERSION), sizeof(gszVersionNumber) / sizeof(char));
 }
 
 void DiabloInit()
@@ -1109,48 +1109,40 @@ void LoadLvlGFX()
 		if (gbIsHellfire) {
 			pDungeonCels = LoadFileInMem("NLevels\\TownData\\Town.CEL");
 			pMegaTiles = LoadFileInMem<MegaTile>("NLevels\\TownData\\Town.TIL");
-			pLevelPieces = LoadFileInMem<uint16_t>("NLevels\\TownData\\Town.MIN");
 		} else {
 			pDungeonCels = LoadFileInMem("Levels\\TownData\\Town.CEL");
 			pMegaTiles = LoadFileInMem<MegaTile>("Levels\\TownData\\Town.TIL");
-			pLevelPieces = LoadFileInMem<uint16_t>("Levels\\TownData\\Town.MIN");
 		}
 		pSpecialCels = LoadCel("Levels\\TownData\\TownS.CEL", SpecialCelWidth);
 		break;
 	case DTYPE_CATHEDRAL:
 		pDungeonCels = LoadFileInMem("Levels\\L1Data\\L1.CEL");
 		pMegaTiles = LoadFileInMem<MegaTile>("Levels\\L1Data\\L1.TIL");
-		pLevelPieces = LoadFileInMem<uint16_t>("Levels\\L1Data\\L1.MIN");
 		pSpecialCels = LoadCel("Levels\\L1Data\\L1S.CEL", SpecialCelWidth);
 		break;
 	case DTYPE_CATACOMBS:
 		pDungeonCels = LoadFileInMem("Levels\\L2Data\\L2.CEL");
 		pMegaTiles = LoadFileInMem<MegaTile>("Levels\\L2Data\\L2.TIL");
-		pLevelPieces = LoadFileInMem<uint16_t>("Levels\\L2Data\\L2.MIN");
 		pSpecialCels = LoadCel("Levels\\L2Data\\L2S.CEL", SpecialCelWidth);
 		break;
 	case DTYPE_CAVES:
 		pDungeonCels = LoadFileInMem("Levels\\L3Data\\L3.CEL");
 		pMegaTiles = LoadFileInMem<MegaTile>("Levels\\L3Data\\L3.TIL");
-		pLevelPieces = LoadFileInMem<uint16_t>("Levels\\L3Data\\L3.MIN");
 		pSpecialCels = LoadCel("Levels\\L1Data\\L1S.CEL", SpecialCelWidth);
 		break;
 	case DTYPE_HELL:
 		pDungeonCels = LoadFileInMem("Levels\\L4Data\\L4.CEL");
 		pMegaTiles = LoadFileInMem<MegaTile>("Levels\\L4Data\\L4.TIL");
-		pLevelPieces = LoadFileInMem<uint16_t>("Levels\\L4Data\\L4.MIN");
 		pSpecialCels = LoadCel("Levels\\L2Data\\L2S.CEL", SpecialCelWidth);
 		break;
 	case DTYPE_NEST:
 		pDungeonCels = LoadFileInMem("NLevels\\L6Data\\L6.CEL");
 		pMegaTiles = LoadFileInMem<MegaTile>("NLevels\\L6Data\\L6.TIL");
-		pLevelPieces = LoadFileInMem<uint16_t>("NLevels\\L6Data\\L6.MIN");
 		pSpecialCels = LoadCel("Levels\\L1Data\\L1S.CEL", SpecialCelWidth);
 		break;
 	case DTYPE_CRYPT:
 		pDungeonCels = LoadFileInMem("NLevels\\L5Data\\L5.CEL");
 		pMegaTiles = LoadFileInMem<MegaTile>("NLevels\\L5Data\\L5.TIL");
-		pLevelPieces = LoadFileInMem<uint16_t>("NLevels\\L5Data\\L5.MIN");
 		pSpecialCels = LoadCel("NLevels\\L5Data\\L5S.CEL", SpecialCelWidth);
 		break;
 	default:
@@ -1218,7 +1210,7 @@ void UnstuckChargers()
 				continue;
 			if (player._pLvlChanging)
 				continue;
-			if (player.plrlevel != MyPlayer->plrlevel)
+			if (!player.isOnActiveLevel())
 				continue;
 			if (&player == MyPlayer)
 				continue;
@@ -1679,7 +1671,7 @@ void InitKeymapActions()
 	    'V',
 	    [] {
 		    EventPlrMsg(fmt::format(
-		                    _(/* TRANSLATORS: {:s} means: Character Name, Game Version, Game Difficulty. */ "{:s} {:s}"),
+		                    fmt::runtime(_(/* TRANSLATORS: {:s} means: Character Name, Game Version, Game Difficulty. */ "{:s} {:s}")),
 		                    PROJECT_NAME,
 		                    PROJECT_VERSION),
 		        UiFlags::ColorWhite);
@@ -1711,7 +1703,6 @@ void FreeGameMem()
 {
 	pDungeonCels = nullptr;
 	pMegaTiles = nullptr;
-	pLevelPieces = nullptr;
 	pSpecialCels = std::nullopt;
 
 	FreeMonsters();
@@ -2093,6 +2084,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 	SetRndSeed(glSeedTbl[currlevel]);
 	IncProgress();
 	MakeLightTable();
+	SetDungeonMicros();
 	LoadLvlGFX();
 	IncProgress();
 
@@ -2133,7 +2125,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 	if (!setlevel) {
 		CreateLevel(lvldir);
 		IncProgress();
-		FillSolidBlockTbls();
+		LoadLevelSOLData();
 		SetRndSeed(glSeedTbl[currlevel]);
 
 		if (leveltype != DTYPE_TOWN) {
@@ -2161,7 +2153,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		IncProgress();
 
 		for (Player &player : Players) {
-			if (player.plractive && currlevel == player.plrlevel) {
+			if (player.plractive && player.isOnActiveLevel()) {
 				InitPlayerGFX(player);
 				if (lvldir != ENTRY_LOAD)
 					InitPlayer(player, firstflag);
@@ -2254,7 +2246,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		IncProgress();
 		InitCorpses();
 		IncProgress();
-		FillSolidBlockTbls();
+		LoadLevelSOLData();
 		IncProgress();
 
 		if (lvldir == ENTRY_WARPLVL)
@@ -2262,7 +2254,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		IncProgress();
 
 		for (Player &player : Players) {
-			if (player.plractive && currlevel == player.plrlevel) {
+			if (player.plractive && player.isOnActiveLevel()) {
 				InitPlayerGFX(player);
 				if (lvldir != ENTRY_LOAD)
 					InitPlayer(player, firstflag);
@@ -2273,12 +2265,14 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		InitMultiView();
 		IncProgress();
 
-		if (firstflag || lvldir == ENTRY_LOAD || !myPlayer._pSLvlVisited[setlvlnum]) {
+		if (firstflag || lvldir == ENTRY_LOAD || !myPlayer._pSLvlVisited[setlvlnum] || gbIsMultiplayer) {
 			InitItems();
 			SavePreLighting();
 		} else {
 			LoadLevel();
 		}
+		if (gbIsMultiplayer)
+			DeltaLoadLevel();
 
 		InitMissiles();
 		IncProgress();
@@ -2288,7 +2282,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 
 	for (int i = 0; i < MAX_PLRS; i++) {
 		Player &player = Players[i];
-		if (player.plractive && player.plrlevel == currlevel && (!player._pLvlChanging || i == MyPlayerId)) {
+		if (player.plractive && player.isOnActiveLevel() && (!player._pLvlChanging || i == MyPlayerId)) {
 			if (player._pHitPoints > 0) {
 				if (!gbIsMultiplayer)
 					dPlayer[player.position.tile.x][player.position.tile.y] = i + 1;
@@ -2299,8 +2293,6 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 			}
 		}
 	}
-
-	SetDungeonMicros();
 
 	IncProgress();
 	IncProgress();

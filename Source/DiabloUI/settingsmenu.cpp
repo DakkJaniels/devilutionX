@@ -73,8 +73,8 @@ void CleanUpSettingsUI()
 	vecDialog.clear();
 	vecOptions.clear();
 
-	ArtBackground.Unload();
-	ArtBackgroundWidescreen.Unload();
+	ArtBackground = std::nullopt;
+	ArtBackgroundWidescreen = std::nullopt;
 	UnloadScrollBar();
 }
 
@@ -254,14 +254,14 @@ void UiSettingsMenu()
 
 		const Rectangle &uiRectangle = GetUIRectangle();
 
-		rectList = { { uiRectangle.position.x + 50, (uiRectangle.position.y + 204) }, { 540, 208 } };
-		rectDescription = { { uiRectangle.position.x + 24, rectList.position.y + rectList.size.height + 16 }, { 590, 35 } };
+		rectList = { uiRectangle.position + Displacement { 50, 204 }, Size { 540, 208 } };
+		rectDescription = { rectList.position + Displacement { -26, rectList.size.height + 16 }, Size { 590, 35 } };
 
 		optionDescription[0] = '\0';
 
 		string_view titleText = shownMenu == ShownMenuType::Settings ? _("Settings") : selectedOption->GetName();
 		vecDialog.push_back(std::make_unique<UiArtText>(titleText.data(), MakeSdlRect(uiRectangle.position.x, uiRectangle.position.y + 161, uiRectangle.size.width, 35), UiFlags::FontSize30 | UiFlags::ColorUiSilver | UiFlags::AlignCenter, 8));
-		vecDialog.push_back(std::make_unique<UiScrollbar>(&ArtScrollBarBackground, &ArtScrollBarThumb, &ArtScrollBarArrow, MakeSdlRect(rectList.position.x + rectList.size.width + 5, rectList.position.y, 25, rectList.size.height)));
+		vecDialog.push_back(std::make_unique<UiScrollbar>(PcxSprite { *ArtScrollBarBackground }, PcxSprite { *ArtScrollBarThumb }, PcxSpriteSheet { *ArtScrollBarArrow }, MakeSdlRect(rectList.position.x + rectList.size.width + 5, rectList.position.y, 25, rectList.size.height)));
 		vecDialog.push_back(std::make_unique<UiArtText>(optionDescription, MakeSdlRect(rectDescription), UiFlags::FontSize12 | UiFlags::ColorUiSilverDark | UiFlags::AlignCenter, 1, IsSmallFontTall() ? 22 : 18));
 
 		size_t itemToSelect = 1;

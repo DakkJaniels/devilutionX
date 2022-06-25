@@ -6,14 +6,14 @@
 #include "gamemenu.h"
 
 #include "cursor.h"
+#include "engine/sound.h"
+#include "engine/sound_defs.hpp"
 #include "error.h"
 #include "gmenu.h"
 #include "init.h"
 #include "loadsave.h"
 #include "options.h"
 #include "pfile.h"
-#include "sound.h"
-#include "sound_defs.hpp"
 #include "utils/language.h"
 
 namespace devilution {
@@ -153,19 +153,19 @@ void GamemenuGetSpeed()
 	if (gbIsMultiplayer) {
 		sgOptionsMenu[3].dwFlags &= ~(GMENU_ENABLED | GMENU_SLIDER);
 		if (sgGameInitInfo.nTickRate >= 50)
-			sgOptionsMenu[3].pszStr = _("Speed: Fastest").c_str();
+			sgOptionsMenu[3].pszStr = _("Speed: Fastest").data();
 		else if (sgGameInitInfo.nTickRate >= 40)
-			sgOptionsMenu[3].pszStr = _("Speed: Faster").c_str();
+			sgOptionsMenu[3].pszStr = _("Speed: Faster").data();
 		else if (sgGameInitInfo.nTickRate >= 30)
-			sgOptionsMenu[3].pszStr = _("Speed: Fast").c_str();
+			sgOptionsMenu[3].pszStr = _("Speed: Fast").data();
 		else if (sgGameInitInfo.nTickRate == 20)
-			sgOptionsMenu[3].pszStr = _("Speed: Normal").c_str();
+			sgOptionsMenu[3].pszStr = _("Speed: Normal").data();
 		return;
 	}
 
 	sgOptionsMenu[3].dwFlags |= GMENU_ENABLED | GMENU_SLIDER;
 
-	sgOptionsMenu[3].pszStr = _("Speed").c_str();
+	sgOptionsMenu[3].pszStr = _("Speed").data();
 	gmenu_slider_steps(&sgOptionsMenu[3], 46);
 	gmenu_slider_set(&sgOptionsMenu[3], 20, 50, sgGameInitInfo.nTickRate);
 }

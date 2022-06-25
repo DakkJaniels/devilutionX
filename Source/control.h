@@ -19,12 +19,12 @@
 #include "utils/attributes.h"
 #include "utils/stdcompat/optional.hpp"
 #include "utils/stdcompat/string_view.hpp"
+#include "utils/string_or_view.hpp"
 #include "utils/ui_fwd.h"
 
 namespace devilution {
 
-#define SPANEL_WIDTH 320
-#define SPANEL_HEIGHT 352
+constexpr Size SidePanelSize { 320, 352 };
 
 extern bool drawhpflag;
 extern bool dropGoldFlag;
@@ -41,7 +41,7 @@ extern bool talkflag;
 extern bool sbookflag;
 extern bool chrflag;
 extern bool drawbtnflag;
-extern std::string InfoString;
+extern StringOrView InfoString;
 extern bool panelflag;
 extern int initialDropGoldValue;
 extern bool panbtndown;
@@ -63,7 +63,7 @@ bool IsChatAvailable();
 inline bool CanPanelsCoverView()
 {
 	const Rectangle &mainPanel = GetMainPanel();
-	return GetScreenWidth() <= mainPanel.size.width && GetScreenHeight() <= SPANEL_HEIGHT + mainPanel.size.height;
+	return GetScreenWidth() <= mainPanel.size.width && GetScreenHeight() <= SidePanelSize.height + mainPanel.size.height;
 }
 void DrawSpellList(const Surface &out);
 void SetSpell();

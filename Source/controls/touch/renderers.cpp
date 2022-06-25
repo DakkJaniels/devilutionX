@@ -6,14 +6,15 @@
 #include "doom.h"
 #include "engine.h"
 #include "engine/render/cel_render.hpp"
-#include "gendung.h"
 #include "init.h"
 #include "inv.h"
+#include "levels/gendung.h"
 #include "minitext.h"
 #include "panels/ui_panels.hpp"
 #include "stores.h"
 #include "towners.h"
 #include "utils/sdl_compat.h"
+#include "utils/sdl_geometry.h"
 #include "utils/sdl_wrap.h"
 
 namespace devilution {
@@ -116,7 +117,7 @@ void LoadPotionArt(Art *potionArt, SDL_Renderer *renderer)
 		ICURS_SCROLL_OF
 	};
 
-	int potionFrame = CURSOR_FIRSTITEM + ICURS_POTION_OF_HEALING;
+	int potionFrame = static_cast<int>(CURSOR_FIRSTITEM) + static_cast<int>(ICURS_POTION_OF_HEALING);
 	Size potionSize = GetInvItemSize(potionFrame);
 
 	auto surface = SDLWrap::CreateRGBSurfaceWithFormat(
@@ -138,9 +139,9 @@ void LoadPotionArt(Art *potionArt, SDL_Renderer *renderer)
 
 	Point position { 0, 0 };
 	for (item_cursor_graphic graphic : potionGraphics) {
-		const int cursorID = CURSOR_FIRSTITEM + graphic;
+		const int cursorID = static_cast<int>(CURSOR_FIRSTITEM) + graphic;
 		const int frame = GetInvItemFrame(cursorID);
-		const OwnedCelSprite &potionSprite = GetInvItemSprite(cursorID);
+		const CelSprite potionSprite { GetInvItemSprite(cursorID) };
 		position.y += potionSize.height;
 		CelClippedDrawTo(Surface(surface.get()), position, potionSprite, frame);
 	}
@@ -168,7 +169,7 @@ bool InteractsWithCharButton(Point point)
 		auto buttonId = static_cast<size_t>(attribute);
 		Rectangle button = ChrBtnsRect[buttonId];
 		button.position = GetPanelPosition(UiPanels::Character, button.position);
-		if (button.Contains(point)) {
+		if (button.contains(point)) {
 			return true;
 		}
 	}
@@ -327,8 +328,8 @@ void VirtualPadButtonRenderer::Render(RenderFunction renderFunction, Art &button
 	int width = diameter;
 	int height = diameter;
 
-	SDL_Rect src { 0, offset, buttonArt.w(), buttonArt.h() };
-	SDL_Rect dst { x, y, width, height };
+	SDL_Rect src = MakeSdlRect(0, offset, buttonArt.w(), buttonArt.h());
+	SDL_Rect dst = MakeSdlRect(x, y, width, height);
 	renderFunction(buttonArt, &src, &dst);
 }
 
@@ -353,8 +354,8 @@ void PotionButtonRenderer::RenderPotion(RenderFunction renderFunction, Art &poti
 	int width = diameter;
 	int height = diameter;
 
-	SDL_Rect src { 0, offset, potionArt.w(), potionArt.h() };
-	SDL_Rect dst { x, y, width, height };
+	SDL_Rect src = MakeSdlRect(0, offset, potionArt.w(), potionArt.h());
+	SDL_Rect dst = MakeSdlRect(x, y, width, height);
 	renderFunction(potionArt, &src, &dst);
 }
 

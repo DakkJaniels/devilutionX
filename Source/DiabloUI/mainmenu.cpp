@@ -2,6 +2,7 @@
 #include "DiabloUI/diabloui.h"
 #include "DiabloUI/selok.h"
 #include "control.h"
+#include "engine/load_pcx.hpp"
 #include "utils/language.h"
 
 namespace devilution {
@@ -46,7 +47,7 @@ void MainmenuLoad(const char *name, void (*fnSound)(const char *file))
 
 	if (!gbIsSpawn || gbIsHellfire) {
 		if (gbIsHellfire)
-			LoadArt("ui_art\\mainmenuw.pcx", &ArtBackgroundWidescreen);
+			ArtBackgroundWidescreen = LoadPcxAsset("ui_art\\mainmenuw.pcx");
 		LoadBackgroundArt("ui_art\\mainmenu.pcx");
 	} else {
 		LoadBackgroundArt("ui_art\\swmmenu.pcx");
@@ -59,7 +60,7 @@ void MainmenuLoad(const char *name, void (*fnSound)(const char *file))
 
 	if (gbIsSpawn && gbIsHellfire) {
 		SDL_Rect rect1 = { (Sint16)(uiPosition.x), (Sint16)(uiPosition.y + 145), 640, 30 };
-		vecMainMenuDialog.push_back(std::make_unique<UiArtText>(_("Shareware").c_str(), rect1, UiFlags::FontSize30 | UiFlags::ColorUiSilver | UiFlags::AlignCenter, 8));
+		vecMainMenuDialog.push_back(std::make_unique<UiArtText>(_("Shareware").data(), rect1, UiFlags::FontSize30 | UiFlags::ColorUiSilver | UiFlags::AlignCenter, 8));
 	}
 
 	vecMainMenuDialog.push_back(std::make_unique<UiList>(vecMenuItems, vecMenuItems.size(), uiPosition.x + 64, (uiPosition.y + 192), 510, 43, UiFlags::FontSize42 | UiFlags::ColorUiGold | UiFlags::AlignCenter, 5));
@@ -76,8 +77,8 @@ void MainmenuLoad(const char *name, void (*fnSound)(const char *file))
 
 void MainmenuFree()
 {
-	ArtBackgroundWidescreen.Unload();
-	ArtBackground.Unload();
+	ArtBackgroundWidescreen = std::nullopt;
+	ArtBackground = std::nullopt;
 
 	vecMainMenuDialog.clear();
 

@@ -8,6 +8,7 @@
 #include "DiabloUI/art.h"
 #include "DiabloUI/ui_flags.hpp"
 #include "engine/cel_sprite.hpp"
+#include "engine/pcx_sprite.hpp"
 #include "engine/render/text_render.hpp"
 #include "utils/enum_traits.h"
 #include "utils/stubs.h"
@@ -20,6 +21,8 @@ enum class UiType {
 	ArtTextButton,
 	Image,
 	ImageCel,
+	ImagePcx,
+	ImageAnimatedPcx,
 	Button,
 	List,
 	Scrollbar,
@@ -174,6 +177,57 @@ private:
 };
 
 //=============================================================================
+class UiImagePcx : public UiItemBase {
+public:
+	UiImagePcx(PcxSprite sprite, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	    : UiItemBase(UiType::ImagePcx, rect, flags)
+	    , sprite_(sprite)
+	{
+	}
+
+	[[nodiscard]] bool IsCentered() const
+	{
+		return HasAnyOf(GetFlags(), UiFlags::AlignCenter);
+	}
+
+	[[nodiscard]] PcxSprite GetSprite() const
+	{
+		return sprite_;
+	}
+
+private:
+	PcxSprite sprite_;
+};
+
+//=============================================================================
+class UiImageAnimatedPcx : public UiItemBase {
+public:
+	UiImageAnimatedPcx(PcxSpriteSheet sheet, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	    : UiItemBase(UiType::ImageAnimatedPcx, rect, flags)
+	    , sheet_(sheet)
+	{
+	}
+
+	[[nodiscard]] bool IsCentered() const
+	{
+		return HasAnyOf(GetFlags(), UiFlags::AlignCenter);
+	}
+
+	[[nodiscard]] PcxSprite GetSprite(uint16_t frame) const
+	{
+		return sheet_.sprite(frame);
+	}
+
+	[[nodiscard]] uint16_t NumFrames() const
+	{
+		return sheet_.numFrames();
+	}
+
+private:
+	PcxSpriteSheet sheet_;
+};
+
+//=============================================================================
 
 class UiArtText : public UiItemBase {
 public:
@@ -233,7 +287,7 @@ private:
 
 class UiScrollbar : public UiItemBase {
 public:
-	UiScrollbar(Art *bg, Art *thumb, Art *arrow, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	UiScrollbar(PcxSprite bg, PcxSprite thumb, PcxSpriteSheet arrow, SDL_Rect rect, UiFlags flags = UiFlags::None)
 	    : UiItemBase(UiType::Scrollbar, rect, flags)
 	    , m_bg(bg)
 	    , m_thumb(thumb)
@@ -242,9 +296,9 @@ public:
 	}
 
 	// private:
-	Art *m_bg;
-	Art *m_thumb;
-	Art *m_arrow;
+	PcxSprite m_bg;
+	PcxSprite m_thumb;
+	PcxSpriteSheet m_arrow;
 };
 
 //=============================================================================
@@ -329,24 +383,12 @@ class UiButton : public UiItemBase {
 public:
 	using Callback = void (*)();
 
-	UiButton(Art *art, string_view text, Callback action, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	UiButton(string_view text, Callback action, SDL_Rect rect, UiFlags flags = UiFlags::None)
 	    : UiItemBase(UiType::Button, rect, flags)
-	    , art_(art)
 	    , text_(text)
 	    , action_(action)
 	    , pressed_(false)
 	{
-	}
-
-	[[nodiscard]] int GetFrame() const
-	{
-		// Frame 1 is a held button sprite, frame 0 is the default
-		return IsPressed() ? 1 : 0;
-	}
-
-	[[nodiscard]] Art *GetArt() const
-	{
-		return art_;
 	}
 
 	[[nodiscard]] string_view GetText() const
@@ -375,8 +417,6 @@ public:
 	}
 
 private:
-	Art *art_;
-
 	string_view text_;
 	Callback action_;
 

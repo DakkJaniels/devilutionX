@@ -3,6 +3,7 @@ if(NOT DEFINED DEVILUTIONX_TEST_FIXTURES_OUTPUT_DIRECTORY)
 endif()
 
 set(devilutionx_fixtures
+  diablo/1-2588.dun
   diablo/1-743271966.dun
   diablo/2-1383137027.dun
   diablo/3-844660068.dun
@@ -50,6 +51,7 @@ set(devilutionx_fixtures
   Levels/L2Data/Blood2.DUN
   Levels/L2Data/Bonestr1.DUN
   Levels/L2Data/Bonestr2.DUN
+  Levels/L3Data/Anvil.DUN
   Levels/L4Data/diab1.DUN
   Levels/L4Data/diab2a.DUN
   Levels/L4Data/diab2b.DUN

@@ -10,7 +10,7 @@
 #include "engine.h"
 #include "engine/cel_sprite.hpp"
 #include "engine/point.hpp"
-#include "gendung.h"
+#include "levels/gendung.h"
 #include "monster.h"
 #include "objdat.h"
 #include "panels/info_box.hpp"
@@ -91,7 +91,7 @@ void InitialiseQuestPools(uint32_t seed, Quest quests[]);
 void CheckQuests();
 bool ForceQuests();
 void CheckQuestKill(const Monster &monster, bool sendmsg);
-void DRLG_CheckQuests(int x, int y);
+void DRLG_CheckQuests(Point position);
 void SetReturnLvlPos();
 void GetReturnLvlPos();
 void LoadPWaterPalette();
