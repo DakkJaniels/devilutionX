@@ -6,10 +6,11 @@
 
 #ifdef _DEBUG
 
+#include <fstream>
 #include <sstream>
 
+#include <fmt/compile.h>
 #include <fmt/format.h>
-#include <fstream>
 
 #include "debug.h"
 
@@ -34,7 +35,7 @@
 namespace devilution {
 
 std::string TestMapPath;
-std::optional<OwnedCelSprite> pSquareCel;
+OptionalOwnedCelSprite pSquareCel;
 bool DebugToggle = false;
 bool DebugGodMode = false;
 bool DebugVision = false;
@@ -99,13 +100,13 @@ void PrintDebugMonster(int m)
 	EventPlrMsg(fmt::format(
 	                "Monster {:d} = {:s}\nX = {:d}, Y = {:d}\nEnemy = {:d}, HP = {:d}\nMode = {:d}, Var1 = {:d}",
 	                m,
-	                monster.mName,
+	                monster.name,
 	                monster.position.tile.x,
 	                monster.position.tile.y,
-	                monster._menemy,
-	                monster._mhitpoints,
-	                static_cast<int>(monster._mmode),
-	                monster._mVar1),
+	                monster.enemy,
+	                monster.hitPoints,
+	                static_cast<int>(monster.mode),
+	                monster.var1),
 	    UiFlags::ColorWhite);
 
 	bool bActive = false;
@@ -115,7 +116,7 @@ void PrintDebugMonster(int m)
 			bActive = true;
 	}
 
-	EventPlrMsg(fmt::format("Active List = {:d}, Squelch = {:d}", bActive ? 1 : 0, monster._msquelch), UiFlags::ColorWhite);
+	EventPlrMsg(fmt::format("Active List = {:d}, Squelch = {:d}", bActive ? 1 : 0, monster.activeForTicks), UiFlags::ColorWhite);
 }
 
 void ProcessMessages()
@@ -240,8 +241,10 @@ std::string DebugCmdLoadQuestMap(const string_view parameter)
 		if (level != quest._qslvl)
 			continue;
 
-		StartNewLvl(MyPlayerId, (quest._qlevel != 21) ? interface_mode::WM_DIABNEXTLVL : interface_mode::WM_DIABTOWNWARP, quest._qlevel);
-		ProcessMessages();
+		if (!MyPlayer->isOnLevel(quest._qlevel)) {
+			StartNewLvl(MyPlayerId, (quest._qlevel != 21) ? interface_mode::WM_DIABNEXTLVL : interface_mode::WM_DIABTOWNWARP, quest._qlevel);
+			ProcessMessages();
+		}
 
 		setlvltype = quest._qlvltype;
 		StartNewLvl(MyPlayerId, WM_DIABSETLVL, level);
@@ -332,7 +335,7 @@ std::string ExportDun(const string_view parameter)
 			uint16_t monsterId = 0;
 			if (dMonster[x][y] > 0) {
 				for (int i = 0; i < 157; i++) {
-					if (MonstConvTbl[i] == Monsters[abs(dMonster[x][y]) - 1].MType->mtype) {
+					if (MonstConvTbl[i] == Monsters[abs(dMonster[x][y]) - 1].type().type) {
 						monsterId = i + 1;
 						break;
 					}
@@ -697,11 +700,11 @@ std::string DebugCmdSpawnUniqueMonster(const string_view parameter)
 	if (mtype == -1)
 		return "Monster not found!";
 
-	int id = MAX_LVLMTYPES - 1;
+	int id = MaxLvlMTypes - 1;
 	bool found = false;
 
 	for (int i = 0; i < LevelMonsterTypeCount; i++) {
-		if (LevelMonsterTypes[i].mtype == mtype) {
+		if (LevelMonsterTypes[i].type == mtype) {
 			id = i;
 			found = true;
 			break;
@@ -709,33 +712,31 @@ std::string DebugCmdSpawnUniqueMonster(const string_view parameter)
 	}
 
 	if (!found) {
-		LevelMonsterTypes[id].mtype = static_cast<_monster_id>(mtype);
+		LevelMonsterTypes[id].type = static_cast<_monster_id>(mtype);
 		InitMonsterGFX(id);
 		InitMonsterSND(id);
-		LevelMonsterTypes[id].mPlaceFlags |= PLACE_SCATTER;
-		LevelMonsterTypes[id].mdeadval = 1;
+		LevelMonsterTypes[id].placeFlags |= PLACE_SCATTER;
+		LevelMonsterTypes[id].corpseId = 1;
 	}
 
 	Player &myPlayer = *MyPlayer;
 
 	int spawnedMonster = 0;
 
-	for (int k : CrawlNum) {
-		int ck = k + 2;
-		for (auto j = static_cast<uint8_t>(CrawlTable[k]); j > 0; j--, ck += 2) {
-			Point pos = myPlayer.position.tile + Displacement { CrawlTable[ck - 1], CrawlTable[ck] };
+	for (const auto &table : CrawlTable) {
+		for (auto displacement : table) {
+			Point pos = myPlayer.position.tile + displacement;
 			if (dPlayer[pos.x][pos.y] != 0 || dMonster[pos.x][pos.y] != 0)
 				continue;
 			if (!IsTileWalkable(pos))
 				continue;
 
-			int mon = AddMonster(pos, myPlayer._pdir, id, true);
-			if (mon < 0)
+			Monster *monster = AddMonster(pos, myPlayer._pdir, id, true);
+			if (monster == nullptr)
 				return fmt::format("I could only summon {} Monsters. The rest strike for shorter working hours.", spawnedMonster);
-			auto &monster = Monsters[mon];
-			PrepareUniqueMonst(monster, uniqueIndex, 0, 0, UniqueMonstersData[uniqueIndex]);
+			PrepareUniqueMonst(*monster, uniqueIndex, 0, 0, UniqueMonstersData[uniqueIndex]);
 			ActiveMonsterCount--;
-			monster._udeadval = 1;
+			monster->corpseId = 1;
 			spawnedMonster += 1;
 
 			if (spawnedMonster >= count)
@@ -783,11 +784,11 @@ std::string DebugCmdSpawnMonster(const string_view parameter)
 	if (mtype == -1)
 		return "Monster not found!";
 
-	int id = MAX_LVLMTYPES - 1;
+	int id = MaxLvlMTypes - 1;
 	bool found = false;
 
 	for (int i = 0; i < LevelMonsterTypeCount; i++) {
-		if (LevelMonsterTypes[i].mtype == mtype) {
+		if (LevelMonsterTypes[i].type == mtype) {
 			id = i;
 			found = true;
 			break;
@@ -795,27 +796,26 @@ std::string DebugCmdSpawnMonster(const string_view parameter)
 	}
 
 	if (!found) {
-		LevelMonsterTypes[id].mtype = static_cast<_monster_id>(mtype);
+		LevelMonsterTypes[id].type = static_cast<_monster_id>(mtype);
 		InitMonsterGFX(id);
 		InitMonsterSND(id);
-		LevelMonsterTypes[id].mPlaceFlags |= PLACE_SCATTER;
-		LevelMonsterTypes[id].mdeadval = 1;
+		LevelMonsterTypes[id].placeFlags |= PLACE_SCATTER;
+		LevelMonsterTypes[id].corpseId = 1;
 	}
 
 	Player &myPlayer = *MyPlayer;
 
 	int spawnedMonster = 0;
 
-	for (int k : CrawlNum) {
-		int ck = k + 2;
-		for (auto j = static_cast<uint8_t>(CrawlTable[k]); j > 0; j--, ck += 2) {
-			Point pos = myPlayer.position.tile + Displacement { CrawlTable[ck - 1], CrawlTable[ck] };
+	for (const auto &table : CrawlTable) {
+		for (auto displacement : table) {
+			Point pos = myPlayer.position.tile + displacement;
 			if (dPlayer[pos.x][pos.y] != 0 || dMonster[pos.x][pos.y] != 0)
 				continue;
 			if (!IsTileWalkable(pos))
 				continue;
 
-			if (AddMonster(pos, myPlayer._pdir, id, true) < 0)
+			if (AddMonster(pos, myPlayer._pdir, id, true) == nullptr)
 				return fmt::format("I could only summon {} Monsters. The rest strike for shorter working hours.", spawnedMonster);
 			spawnedMonster += 1;
 
@@ -1025,7 +1025,7 @@ void GetDebugMonster()
 void NextDebugMonster()
 {
 	DebugMonsterId++;
-	if (DebugMonsterId == MAXMONSTERS)
+	if (DebugMonsterId == MaxMonsters)
 		DebugMonsterId = 0;
 
 	EventPlrMsg(fmt::format("Current debug monster = {:d}", DebugMonsterId), UiFlags::ColorWhite);
@@ -1080,12 +1080,12 @@ bool GetDebugGridText(Point dungeonCoords, char *debugGridTextBuffer)
 	Point megaCoords = dungeonCoords.worldToMega();
 	switch (SelectedDebugGridTextItem) {
 	case DebugGridTextItem::coords:
-		sprintf(debugGridTextBuffer, "%d:%d", dungeonCoords.x, dungeonCoords.y);
+		*fmt::format_to(debugGridTextBuffer, FMT_COMPILE("{}:{}"), dungeonCoords.x, dungeonCoords.y) = '\0';
 		return true;
 	case DebugGridTextItem::cursorcoords:
 		if (dungeonCoords != cursPosition)
 			return false;
-		sprintf(debugGridTextBuffer, "%d:%d", dungeonCoords.x, dungeonCoords.y);
+		*fmt::format_to(debugGridTextBuffer, FMT_COMPILE("{}:{}"), dungeonCoords.x, dungeonCoords.y) = '\0';
 		return true;
 	case DebugGridTextItem::objectindex: {
 		info = 0;
@@ -1154,7 +1154,7 @@ bool GetDebugGridText(Point dungeonCoords, char *debugGridTextBuffer)
 	}
 	if (info == 0)
 		return false;
-	sprintf(debugGridTextBuffer, "%d", info);
+	*fmt::format_to(debugGridTextBuffer, FMT_COMPILE("{}"), info) = '\0';
 	return true;
 }
 

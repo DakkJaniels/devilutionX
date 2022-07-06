@@ -13,6 +13,7 @@
 #include "miniwin/miniwin.h"
 #include "misdat.h"
 #include "monster.h"
+#include "player.h"
 #include "spelldat.h"
 
 namespace devilution {
@@ -137,8 +138,7 @@ struct Missile {
 extern std::list<Missile> Missiles;
 extern bool MissilePreFlag;
 
-void GetDamageAmt(int i, int *mind, int *maxd);
-int GetSpellLevel(int playerId, spell_id sn);
+void GetDamageAmt(spell_id i, int *mind, int *maxd);
 
 /**
  * @brief Returns the direction a vector from p1(x1, y1) to p2(x2, y2) is pointing to.
@@ -160,7 +160,7 @@ int GetSpellLevel(int playerId, spell_id sn);
  * @return the direction of the p1->p2 vector
  */
 Direction16 GetDirection16(Point p1, Point p2);
-bool MonsterTrapHit(int m, int mindam, int maxdam, int dist, missile_id t, bool shift);
+bool MonsterTrapHit(int monsterId, int mindam, int maxdam, int dist, missile_id t, bool shift);
 bool PlayerMHit(int pnum, Monster *monster, int dist, int mind, int maxd, missile_id mtype, bool shift, int earflag, bool *blocked);
 
 /**

@@ -137,7 +137,7 @@ const Point InvRect[] = {
 
 namespace {
 
-std::optional<OwnedCelSprite> pInvCels;
+OptionalOwnedCelSprite pInvCels;
 
 /**
  * @brief Adds an item to a player's InvGrid array
@@ -236,7 +236,7 @@ bool CanWield(Player &player, const Item &item)
  */
 bool CanEquip(Player &player, const Item &item, inv_body_loc bodyLocation)
 {
-	if (!CanEquip(item) || player._pmode > PM_WALK3 || !player.InvBody[bodyLocation].isEmpty()) {
+	if (!CanEquip(item) || player._pmode > PM_WALK_SIDEWAYS || !player.InvBody[bodyLocation].isEmpty()) {
 		return false;
 	}
 
@@ -272,10 +272,8 @@ void ChangeEquipment(Player &player, inv_body_loc bodyLocation, const Item &item
 	}
 }
 
-bool AutoEquip(int playerId, const Item &item, inv_body_loc bodyLocation, bool persistItem)
+bool AutoEquip(Player &player, const Item &item, inv_body_loc bodyLocation, bool persistItem)
 {
-	Player &player = Players[playerId];
-
 	if (!CanEquip(player, item, bodyLocation)) {
 		return false;
 	}
@@ -283,7 +281,7 @@ bool AutoEquip(int playerId, const Item &item, inv_body_loc bodyLocation, bool p
 	if (persistItem) {
 		ChangeEquipment(player, bodyLocation, item);
 
-		if (*sgOptions.Audio.autoEquipSound && playerId == MyPlayerId) {
+		if (*sgOptions.Audio.autoEquipSound && &player == MyPlayer) {
 			PlaySFX(ItemInvSnds[ItemCAnimTbl[item._iCurs]]);
 		}
 
@@ -372,7 +370,7 @@ void CheckInvPaste(Player &player, Point cursorPosition)
 		} else {
 			int yy = std::max(INV_ROW_SLOT_SIZE * ((ii / INV_ROW_SLOT_SIZE) - ((itemSize.height - 1) / 2)), 0);
 			for (int j = 0; j < itemSize.height; j++) {
-				if (yy >= NUM_INV_GRID_ELEM)
+				if (yy >= InventoryGridCells)
 					return;
 				int xx = std::max((ii % INV_ROW_SLOT_SIZE) - ((itemSize.width - 1) / 2), 0);
 				for (int i = 0; i < itemSize.width; i++) {
@@ -404,7 +402,7 @@ void CheckInvPaste(Player &player, Point cursorPosition)
 		return;
 	}
 
-	if (player._pmode > PM_WALK3 && IsNoneOf(il, ILOC_UNEQUIPABLE, ILOC_BELT))
+	if (player._pmode > PM_WALK_SIDEWAYS && IsNoneOf(il, ILOC_UNEQUIPABLE, ILOC_BELT))
 		return;
 
 	if (&player == MyPlayer)
@@ -566,11 +564,9 @@ void CheckInvPaste(Player &player, Point cursorPosition)
 	}
 }
 
-void CheckInvCut(int pnum, Point cursorPosition, bool automaticMove, bool dropItem)
+void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool dropItem)
 {
-	Player &player = Players[pnum];
-
-	if (player._pmode > PM_WALK3) {
+	if (player._pmode > PM_WALK_SIDEWAYS) {
 		return;
 	}
 
@@ -578,8 +574,6 @@ void CheckInvCut(int pnum, Point cursorPosition, bool automaticMove, bool dropIt
 		CloseGoldDrop();
 		dropGoldValue = 0;
 	}
-
-	bool done = false;
 
 	uint32_t r = 0;
 	for (; r < NUM_XY_SLOTS; r++) {
@@ -595,12 +589,11 @@ void CheckInvCut(int pnum, Point cursorPosition, bool automaticMove, bool dropIt
 		    && cursorPosition.x < InvRect[r].x + xo + (InventorySlotSizeInPixels.width + 1)
 		    && cursorPosition.y >= InvRect[r].y + yo - (InventorySlotSizeInPixels.height + 1)
 		    && cursorPosition.y < InvRect[r].y + yo) {
-			done = true;
 			break;
 		}
 	}
 
-	if (!done) {
+	if (r == NUM_XY_SLOTS) {
 		// not on an inventory slot rectangle
 		return;
 	}
@@ -781,7 +774,7 @@ void CheckInvCut(int pnum, Point cursorPosition, bool automaticMove, bool dropIt
 						}
 					}
 					holdItem = player.InvList[iv - 1];
-					automaticallyMoved = automaticallyEquipped = AutoEquip(pnum, holdItem);
+					automaticallyMoved = automaticallyEquipped = AutoEquip(player, holdItem);
 				}
 			}
 
@@ -814,7 +807,7 @@ void CheckInvCut(int pnum, Point cursorPosition, bool automaticMove, bool dropIt
 		CalcPlrInv(player, true);
 		holdItem._iStatFlag = player.CanUseItem(holdItem);
 
-		if (pnum == MyPlayerId) {
+		if (&player == MyPlayer) {
 			if (automaticallyEquipped) {
 				PlaySFX(ItemInvSnds[ItemCAnimTbl[holdItem._iCurs]]);
 			} else if (!automaticMove || automaticallyMoved) {
@@ -1154,7 +1147,7 @@ void DrawInv(const Surface &out)
 		}
 	}
 
-	for (int i = 0; i < NUM_INV_GRID_ELEM; i++) {
+	for (int i = 0; i < InventoryGridCells; i++) {
 		if (myPlayer.InvGrid[i] != 0) {
 			InvDrawSlotBack(
 			    out,
@@ -1163,7 +1156,7 @@ void DrawInv(const Surface &out)
 		}
 	}
 
-	for (int j = 0; j < NUM_INV_GRID_ELEM; j++) {
+	for (int j = 0; j < InventoryGridCells; j++) {
 		if (myPlayer.InvGrid[j] > 0) { // first slot of an item
 			int ii = myPlayer.InvGrid[j] - 1;
 			int cursId = myPlayer.InvList[ii]._iCurs + CURSOR_FIRSTITEM;
@@ -1200,7 +1193,7 @@ void DrawInvBelt(const Surface &out)
 
 	Player &myPlayer = *MyPlayer;
 
-	for (int i = 0; i < MAXBELTITEMS; i++) {
+	for (int i = 0; i < MaxBeltItems; i++) {
 		if (myPlayer.SpdList[i].isEmpty()) {
 			continue;
 		}
@@ -1257,14 +1250,14 @@ bool AutoPlaceItemInBelt(Player &player, const Item &item, bool persistItem)
 	return false;
 }
 
-bool AutoEquip(int playerId, const Item &item, bool persistItem)
+bool AutoEquip(Player &player, const Item &item, bool persistItem)
 {
 	if (!CanEquip(item)) {
 		return false;
 	}
 
 	for (int bodyLocation = INVLOC_HEAD; bodyLocation < NUM_INVLOC; bodyLocation++) {
-		if (AutoEquip(playerId, item, (inv_body_loc)bodyLocation, persistItem)) {
+		if (AutoEquip(player, item, (inv_body_loc)bodyLocation, persistItem)) {
 			return true;
 		}
 	}
@@ -1356,7 +1349,7 @@ bool AutoPlaceItemInInventory(Player &player, const Item &item, bool persistItem
 		return false;
 	}
 
-	app_fatal("Unknown item size: %ix%i", itemSize.width, itemSize.height);
+	app_fatal(fmt::format("Unknown item size: {}x{}", itemSize.width, itemSize.height));
 }
 
 bool AutoPlaceItemInInventorySlot(Player &player, int slotIndex, const Item &item, bool persistItem)
@@ -1365,7 +1358,7 @@ bool AutoPlaceItemInInventorySlot(Player &player, int slotIndex, const Item &ite
 
 	Size itemSize = GetInventorySize(item);
 	for (int j = 0; j < itemSize.height; j++) {
-		if (yy >= NUM_INV_GRID_ELEM) {
+		if (yy >= InventoryGridCells) {
 			return false;
 		}
 		int xx = (slotIndex > 0) ? (slotIndex % 10) : 0;
@@ -1514,7 +1507,7 @@ void CheckInvItem(bool isShiftHeld, bool isCtrlHeld)
 	} else if (IsStashOpen && isCtrlHeld) {
 		TransferItemToStash(*MyPlayer, pcursinvitem);
 	} else {
-		CheckInvCut(MyPlayerId, MousePosition, isShiftHeld, isCtrlHeld);
+		CheckInvCut(*MyPlayer, MousePosition, isShiftHeld, isCtrlHeld);
 	}
 }
 
@@ -1600,10 +1593,9 @@ std::optional<Point> FindAdjacentPositionForItem(Point origin, Direction facing)
 	return {};
 }
 
-void AutoGetItem(int pnum, Item *itemPointer, int ii)
+void AutoGetItem(Player &player, Item *itemPointer, int ii)
 {
 	Item &item = *itemPointer;
-	Player &player = Players[pnum];
 
 	if (dropGoldFlag) {
 		CloseGoldDrop();
@@ -1626,7 +1618,7 @@ void AutoGetItem(int pnum, Item *itemPointer, int ii)
 			SetPlrHandGoldCurs(item);
 		}
 	} else {
-		done = AutoEquipEnabled(player, item) && AutoEquip(pnum, item);
+		done = AutoEquipEnabled(player, item) && AutoEquip(player, item);
 		if (done) {
 			autoEquipped = true;
 		}
@@ -1640,7 +1632,7 @@ void AutoGetItem(int pnum, Item *itemPointer, int ii)
 	}
 
 	if (done) {
-		if (!autoEquipped && *sgOptions.Audio.itemPickupSound && pnum == MyPlayerId) {
+		if (!autoEquipped && *sgOptions.Audio.itemPickupSound && &player == MyPlayer) {
 			PlaySFX(IS_IGRAB);
 		}
 
@@ -1648,7 +1640,7 @@ void AutoGetItem(int pnum, Item *itemPointer, int ii)
 		return;
 	}
 
-	if (pnum == MyPlayerId) {
+	if (&player == MyPlayer) {
 		player.Say(HeroSpeech::ICantCarryAnymore);
 	}
 	RespawnItem(item, true);
@@ -1954,9 +1946,6 @@ Item &GetInventoryItem(Player &player, int location)
 
 bool UseInvItem(int pnum, int cii)
 {
-	int c;
-	Item *item;
-
 	Player &player = Players[pnum];
 
 	if (player._pInvincible && player._pHitPoints == 0 && pnum == MyPlayerId)
@@ -1969,6 +1958,8 @@ bool UseInvItem(int pnum, int cii)
 		return false;
 
 	bool speedlist = false;
+	int c;
+	Item *item;
 	if (cii <= INVITEM_INV_LAST) {
 		c = cii - INVITEM_INV_FIRST;
 		item = &player.InvList[c];
@@ -2099,7 +2090,7 @@ void DoTelekinesis()
 		NetSendCmdGItem(true, CMD_REQUESTAGITEM, MyPlayerId, MyPlayerId, pcursitem);
 	if (pcursmonst != -1) {
 		auto &monter = Monsters[pcursmonst];
-		if (!M_Talker(monter) && monter.mtalkmsg == TEXT_NONE)
+		if (!M_Talker(monter) && monter.talkMsg == TEXT_NONE)
 			NetSendCmdParam1(true, CMD_KNOCKBACK, pcursmonst);
 	}
 	NewCursor(CURSOR_HAND);

@@ -5,8 +5,10 @@
  */
 #pragma once
 
-#include <array>
 #include <cstdint>
+
+#include <algorithm>
+#include <array>
 
 #include "diablo.h"
 #include "engine.h"
@@ -26,13 +28,12 @@
 
 namespace devilution {
 
-// number of inventory grid cells
-#define NUM_INV_GRID_ELEM 40
-#define MAXBELTITEMS 8
-#define MAXRESIST 75
-#define MAXCHARLEVEL 50
-#define MAX_SPELL_LEVEL 15
-#define PLR_NAME_LEN 32
+constexpr int InventoryGridCells = 40;
+constexpr int MaxBeltItems = 8;
+constexpr int MaxResistance = 75;
+constexpr int MaxCharacterLevel = 50;
+constexpr int MaxSpellLevel = 15;
+constexpr int PlayerNameLength = 32;
 
 constexpr size_t NumHotkeys = 12;
 constexpr int BaseHitChance = 50;
@@ -113,9 +114,9 @@ enum class PlayerWeaponGraphic : uint8_t {
 
 enum PLR_MODE : uint8_t {
 	PM_STAND,
-	PM_WALK,  // Movement towards N, NW, or NE
-	PM_WALK2, // Movement towards S, SW, or SE
-	PM_WALK3, // Movement towards W or E
+	PM_WALK_NORTHWARDS,
+	PM_WALK_SOUTHWARDS,
+	PM_WALK_SIDEWAYS,
 	PM_ATTACK,
 	PM_RATTACK,
 	PM_BLOCK,
@@ -196,14 +197,14 @@ struct PlayerAnimationData {
 	/**
 	 * @brief CelSprites for the different directions
 	 */
-	std::array<std::optional<CelSprite>, 8> CelSpritesForDirections;
+	std::array<OptionalCelSprite, 8> CelSpritesForDirections;
 	/**
 	 * @brief Raw Data (binary) of the CL2 file.
-	 *        Is referenced from CelSprite in CelSpritesForDirections
+	 *        Is referenced from CelSprite in celSpritesForDirections
 	 */
 	std::unique_ptr<byte[]> RawData;
 
-	[[nodiscard]] std::optional<CelSprite> GetCelSpritesForDirection(Direction direction) const
+	[[nodiscard]] OptionalCelSprite GetCelSpritesForDirection(Direction direction) const
 	{
 		return CelSpritesForDirections[static_cast<size_t>(direction)];
 	}
@@ -234,7 +235,7 @@ struct Player {
 	/**
 	 * @brief Contains a optional preview CelSprite that is displayed until the current command is handled by the game logic
 	 */
-	std::optional<CelSprite> previewCelSprite;
+	OptionalCelSprite previewCelSprite;
 	/**
 	 * @brief Contains the progress to next game tick when previewCelSprite was set
 	 */
@@ -259,7 +260,7 @@ struct Player {
 	bool _pInvincible;
 	int8_t _pLightRad;
 	bool _pLvlChanging; // True when the player is transitioning between levels
-	char _pName[PLR_NAME_LEN];
+	char _pName[PlayerNameLength];
 	HeroClass _pClass;
 	int _pStrength;
 	int _pBaseStr;
@@ -302,20 +303,20 @@ struct Player {
 	 * @brief Contains Data (Sprites) for the different Animations
 	 */
 	std::array<PlayerAnimationData, enum_size<player_graphic>::value> AnimationData;
-	int _pNFrames;
-	int _pWFrames;
-	int _pAFrames;
-	int _pAFNum;
-	int _pSFrames;
-	int _pSFNum;
-	int _pHFrames;
-	int _pDFrames;
-	int _pBFrames;
+	int8_t _pNFrames;
+	int8_t _pWFrames;
+	int8_t _pAFrames;
+	int8_t _pAFNum;
+	int8_t _pSFrames;
+	int8_t _pSFNum;
+	int8_t _pHFrames;
+	int8_t _pDFrames;
+	int8_t _pBFrames;
 	Item InvBody[NUM_INVLOC];
-	Item InvList[NUM_INV_GRID_ELEM];
+	Item InvList[InventoryGridCells];
 	int _pNumInv;
-	int8_t InvGrid[NUM_INV_GRID_ELEM];
-	Item SpdList[MAXBELTITEMS];
+	int8_t InvGrid[InventoryGridCells];
+	Item SpdList[MaxBeltItems];
 	Item HoldItem;
 	int _pIMinDam;
 	int _pIMaxDam;
@@ -395,7 +396,7 @@ struct Player {
 			return mostValuableItem;
 		};
 
-		const Item *mostValuableItem = getMostValuableItem(SpdList, SpdList + MAXBELTITEMS);
+		const Item *mostValuableItem = getMostValuableItem(SpdList, SpdList + MaxBeltItems);
 		mostValuableItem = getMostValuableItem(InvBody, InvBody + inv_body_loc::NUM_INVLOC, mostValuableItem);
 		mostValuableItem = getMostValuableItem(InvList, InvList + _pNumInv, mostValuableItem);
 
@@ -691,13 +692,13 @@ struct Player {
 	{
 		if (_pmode == PM_STAND)
 			return true;
-		if (_pmode == PM_ATTACK && AnimInfo.CurrentFrame >= _pAFNum)
+		if (_pmode == PM_ATTACK && AnimInfo.currentFrame >= _pAFNum)
 			return true;
-		if (_pmode == PM_RATTACK && AnimInfo.CurrentFrame >= _pAFNum)
+		if (_pmode == PM_RATTACK && AnimInfo.currentFrame >= _pAFNum)
 			return true;
-		if (_pmode == PM_SPELL && AnimInfo.CurrentFrame >= _pSFNum)
+		if (_pmode == PM_SPELL && AnimInfo.currentFrame >= _pSFNum)
 			return true;
-		if (IsWalking() && AnimInfo.CurrentFrame == AnimInfo.NumberOfFrames - 1)
+		if (IsWalking() && AnimInfo.currentFrame == AnimInfo.numberOfFrames - 1)
 			return true;
 		return false;
 	}
@@ -745,7 +746,7 @@ extern DVL_API_FOR_TEST int MyPlayerId;
 extern DVL_API_FOR_TEST Player *MyPlayer;
 extern DVL_API_FOR_TEST Player Players[MAX_PLRS];
 extern bool MyPlayerIsDead;
-extern int BlockBonuses[enum_size<HeroClass>::value];
+extern const int BlockBonuses[enum_size<HeroClass>::value];
 
 void LoadPlrGFX(Player &player, player_graphic graphic);
 void InitPlayerGFX(Player &player);
@@ -761,14 +762,14 @@ void ResetPlayerGFX(Player &player);
  * @param numSkippedFrames Number of Frames that will be skipped (for example with modifier "faster attack")
  * @param distributeFramesBeforeFrame Distribute the numSkippedFrames only before this frame
  */
-void NewPlrAnim(Player &player, player_graphic graphic, Direction dir, int numberOfFrames, int delayLen, AnimationDistributionFlags flags = AnimationDistributionFlags::None, int numSkippedFrames = 0, int distributeFramesBeforeFrame = 0);
+void NewPlrAnim(Player &player, player_graphic graphic, Direction dir, int8_t numberOfFrames, int8_t delayLen, AnimationDistributionFlags flags = AnimationDistributionFlags::None, int8_t numSkippedFrames = 0, int8_t distributeFramesBeforeFrame = 0);
 void SetPlrAnims(Player &player);
-void CreatePlayer(int playerId, HeroClass c);
+void CreatePlayer(Player &player, HeroClass c);
 int CalcStatDiff(Player &player);
 #ifdef _DEBUG
-void NextPlrLevel(int pnum);
+void NextPlrLevel(Player &player);
 #endif
-void AddPlrExperience(int pnum, int lvl, int exp);
+void AddPlrExperience(Player &player, int lvl, int exp);
 void AddPlrMonstExper(int lvl, int exp, char pmask);
 void ApplyPlrDamage(int pnum, int dam, int minHP = 0, int frac = 0, int earflag = 0);
 void InitPlayer(Player &player, bool FirstTime);
@@ -776,7 +777,7 @@ void InitMultiView();
 void PlrClrTrans(Point position);
 void PlrDoTrans(Point position);
 void SetPlayerOld(Player &player);
-void FixPlayerLocation(int pnum, Direction bDir);
+void FixPlayerLocation(Player &player, Direction bDir);
 void StartStand(int pnum, Direction dir);
 void StartPlrBlock(int pnum, Direction dir);
 void FixPlrWalkTags(int pnum);
@@ -788,7 +789,7 @@ void StartPlayerKill(int pnum, int earflag);
  */
 void StripTopGold(Player &player);
 void SyncPlrKill(int pnum, int earflag);
-void RemovePlrMissiles(int pnum);
+void RemovePlrMissiles(const Player &player);
 void StartNewLvl(int pnum, interface_mode fom, int lvl);
 void RestartTownLvl(int pnum);
 void StartWarpLvl(int pnum, int pidx);
@@ -798,14 +799,14 @@ bool PosOkPlayer(const Player &player, Point position);
 void MakePlrPath(Player &player, Point targetPosition, bool endspace);
 void CalcPlrStaff(Player &player);
 void CheckPlrSpell(bool isShiftHeld, spell_id spellID = MyPlayer->_pRSpell, spell_type spellType = MyPlayer->_pRSplType);
-void SyncPlrAnim(int pnum);
+void SyncPlrAnim(Player &player);
 void SyncInitPlrPos(int pnum);
 void SyncInitPlr(int pnum);
 void CheckStats(Player &player);
-void ModifyPlrStr(int p, int l);
-void ModifyPlrMag(int p, int l);
-void ModifyPlrDex(int p, int l);
-void ModifyPlrVit(int p, int l);
+void ModifyPlrStr(Player &player, int l);
+void ModifyPlrMag(Player &player, int l);
+void ModifyPlrDex(Player &player, int l);
+void ModifyPlrVit(Player &player, int l);
 void SetPlayerHitPoints(Player &player, int val);
 void SetPlrStr(Player &player, int v);
 void SetPlrMag(Player &player, int v);
@@ -816,14 +817,14 @@ void PlayDungMsgs();
 
 /* data */
 
-extern int plrxoff[9];
-extern int plryoff[9];
-extern int plrxoff2[9];
-extern int plryoff2[9];
-extern int StrengthTbl[enum_size<HeroClass>::value];
-extern int MagicTbl[enum_size<HeroClass>::value];
-extern int DexterityTbl[enum_size<HeroClass>::value];
-extern int VitalityTbl[enum_size<HeroClass>::value];
-extern uint32_t ExpLvlsTbl[MAXCHARLEVEL + 1];
+extern const int8_t plrxoff[9];
+extern const int8_t plryoff[9];
+extern const int8_t plrxoff2[9];
+extern const int8_t plryoff2[9];
+extern const int StrengthTbl[enum_size<HeroClass>::value];
+extern const int MagicTbl[enum_size<HeroClass>::value];
+extern const int DexterityTbl[enum_size<HeroClass>::value];
+extern const int VitalityTbl[enum_size<HeroClass>::value];
+extern const uint32_t ExpLvlsTbl[MaxCharacterLevel + 1];
 
 } // namespace devilution

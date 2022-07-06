@@ -5,6 +5,8 @@
  */
 #include "effects.h"
 
+#include <fmt/compile.h>
+
 #include "engine/random.hpp"
 #include "engine/sound.h"
 #include "engine/sound_defs.hpp"
@@ -1215,13 +1217,13 @@ void InitMonsterSND(int monst)
 		return;
 	}
 
-	const int mtype = LevelMonsterTypes[monst].mtype;
+	const int mtype = LevelMonsterTypes[monst].type;
 	for (int i = 0; i < 4; i++) {
 		if (MonstSndChar[i] != 's' || MonstersData[mtype].snd_special) {
 			for (int j = 0; j < 2; j++) {
 				char path[MAX_PATH];
-				sprintf(path, MonstersData[mtype].sndfile, MonstSndChar[i], j + 1);
-				LevelMonsterTypes[monst].Snds[i][j] = sound_file_load(path);
+				*fmt::format_to(path, FMT_COMPILE("{}{}{}.WAV"), MonstersData[mtype].sndfile, MonstSndChar[i], j + 1) = '\0';
+				LevelMonsterTypes[monst].sounds[i][j] = sound_file_load(path);
 			}
 		}
 	}
@@ -1230,11 +1232,11 @@ void InitMonsterSND(int monst)
 void FreeMonsterSnd()
 {
 #ifdef _DEBUG
-	for (int i = 0; i < MAX_LVLMTYPES; i++) {
+	for (int i = 0; i < MaxLvlMTypes; i++) {
 #else
 	for (int i = 0; i < LevelMonsterTypeCount; i++) {
 #endif
-		for (auto &variants : LevelMonsterTypes[i].Snds) {
+		for (auto &variants : LevelMonsterTypes[i].sounds) {
 			for (auto &snd : variants) {
 				snd = nullptr;
 			}

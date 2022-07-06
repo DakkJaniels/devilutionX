@@ -182,34 +182,30 @@ void MoveMissilePos(Missile &missile)
 	}
 }
 
-bool MonsterMHit(int pnum, int m, int mindam, int maxdam, int dist, missile_id t, bool shift)
+bool MonsterMHit(int pnum, int monsterId, int mindam, int maxdam, int dist, missile_id t, bool shift)
 {
-	auto &monster = Monsters[m];
+	auto &monster = Monsters[monsterId];
 
-	if (!monster.IsPossibleToHit() || monster.IsImmune(t))
+	if (!monster.isPossibleToHit() || monster.isImmune(t))
 		return false;
 
 	int hit = GenerateRnd(100);
 	int hper = 0;
-	if (pnum != -1) {
-		const Player &player = Players[pnum];
-		if (MissilesData[t].mType == 0) {
-			hper = player.GetRangedPiercingToHit();
-			hper -= player.CalculateArmorPierce(monster.mArmorClass, false);
-			hper -= (dist * dist) / 2;
-		} else {
-			hper = player.GetMagicToHit() - (monster.mLevel * 2) - dist;
-		}
+	const Player &player = Players[pnum];
+	if (MissilesData[t].mType == 0) {
+		hper = player.GetRangedPiercingToHit();
+		hper -= player.CalculateArmorPierce(monster.armorClass, false);
+		hper -= (dist * dist) / 2;
 	} else {
-		hper = GenerateRnd(75) - monster.mLevel * 2;
+		hper = player.GetMagicToHit() - (monster.level * 2) - dist;
 	}
 
 	hper = clamp(hper, 5, 95);
 
-	if (monster._mmode == MonsterMode::Petrified)
+	if (monster.mode == MonsterMode::Petrified)
 		hit = 0;
 
-	if (monster.TryLiftGargoyle())
+	if (monster.tryLiftGargoyle())
 		return true;
 
 	if (hit >= hper) {
@@ -221,12 +217,10 @@ bool MonsterMHit(int pnum, int m, int mindam, int maxdam, int dist, missile_id t
 
 	int dam;
 	if (t == MIS_BONESPIRIT) {
-		dam = monster._mhitpoints / 3 >> 6;
+		dam = monster.hitPoints / 3 >> 6;
 	} else {
 		dam = mindam + GenerateRnd(maxdam - mindam + 1);
 	}
-
-	const Player &player = Players[pnum];
 
 	if (MissilesData[t].mType == 0 && MissilesData[t].mResist == MISR_NONE) {
 		dam = player._pIBonusDamMod + dam * player._pIBonusDam / 100 + dam;
@@ -234,44 +228,43 @@ bool MonsterMHit(int pnum, int m, int mindam, int maxdam, int dist, missile_id t
 			dam += player._pDamageMod;
 		else
 			dam += player._pDamageMod / 2;
-		if (monster.MData->mMonstClass == MonsterClass::Demon && HasAnyOf(player._pIFlags, ItemSpecialEffect::TripleDemonDamage))
+		if (monster.data().mMonstClass == MonsterClass::Demon && HasAnyOf(player._pIFlags, ItemSpecialEffect::TripleDemonDamage))
 			dam *= 3;
 	}
-	bool resist = monster.IsResistant(t);
+	bool resist = monster.isResistant(t);
 	if (!shift)
 		dam <<= 6;
 	if (resist)
 		dam >>= 2;
 
 	if (pnum == MyPlayerId)
-		monster._mhitpoints -= dam;
+		monster.hitPoints -= dam;
 
 	if ((gbIsHellfire && HasAnyOf(player._pIFlags, ItemSpecialEffect::NoHealOnMonsters)) || (!gbIsHellfire && HasAnyOf(player._pIFlags, ItemSpecialEffect::FireArrows)))
-		monster._mFlags |= MFLAG_NOHEAL;
+		monster.flags |= MFLAG_NOHEAL;
 
-	if (monster._mhitpoints >> 6 <= 0) {
-		M_StartKill(m, pnum);
+	if (monster.hitPoints >> 6 <= 0) {
+		M_StartKill(monsterId, pnum);
 	} else if (resist) {
 		PlayEffect(monster, 1);
 	} else {
-		if (monster._mmode != MonsterMode::Petrified && MissilesData[t].mType == 0 && HasAnyOf(player._pIFlags, ItemSpecialEffect::Knockback))
-			M_GetKnockback(m);
-		if (monster.MType->mtype != MT_GOLEM)
-			M_StartHit(m, pnum, dam);
+		if (monster.mode != MonsterMode::Petrified && MissilesData[t].mType == 0 && HasAnyOf(player._pIFlags, ItemSpecialEffect::Knockback))
+			M_GetKnockback(monster);
+		if (monster.type().type != MT_GOLEM)
+			M_StartHit(monster, pnum, dam);
 	}
 
-	if (monster._msquelch == 0) {
-		monster._msquelch = UINT8_MAX;
+	if (monster.activeForTicks == 0) {
+		monster.activeForTicks = UINT8_MAX;
 		monster.position.last = player.position.tile;
 	}
 
 	return true;
 }
 
-bool Plr2PlrMHit(int pnum, int p, int mindam, int maxdam, int dist, missile_id mtype, bool shift, bool *blocked)
+bool Plr2PlrMHit(const Player &player, int p, int mindam, int maxdam, int dist, missile_id mtype, bool shift, bool *blocked)
 {
-	Player &player = Players[pnum];
-	auto &target = Players[p];
+	Player &target = Players[p];
 
 	if (sgGameInitInfo.bFriendlyFire == 0 && player.friendlyMode)
 		return false;
@@ -348,7 +341,7 @@ bool Plr2PlrMHit(int pnum, int p, int mindam, int maxdam, int dist, missile_id m
 		dam /= 2;
 	if (resper > 0) {
 		dam -= (dam * resper) / 100;
-		if (pnum == MyPlayerId)
+		if (&player == MyPlayer)
 			NetSendCmdDamage(true, p, dam);
 		target.Say(HeroSpeech::ArghClang);
 		return true;
@@ -358,7 +351,7 @@ bool Plr2PlrMHit(int pnum, int p, int mindam, int maxdam, int dist, missile_id m
 		StartPlrBlock(p, GetDirection(target.position.tile, player.position.tile));
 		*blocked = true;
 	} else {
-		if (pnum == MyPlayerId)
+		if (&player == MyPlayer)
 			NetSendCmdDamage(true, p, dam);
 		StartPlrHit(p, dam, false);
 	}
@@ -395,25 +388,16 @@ void CheckMissileCol(Missile &missile, int minDamage, int maxDamage, bool isDama
 	int my = position.y;
 
 	bool isMonsterHit = false;
-	const int mid = dMonster[mx][my];
-	if (missile._micaster != TARGET_BOTH && !missile.IsTrap()) {
-		if (missile._micaster == TARGET_MONSTERS) {
-			if (mid != 0 && (mid > 0 || Monsters[abs(mid) - 1]._mmode == MonsterMode::Petrified)) {
-				isMonsterHit = MonsterMHit(missile._misource, abs(mid) - 1, minDamage, maxDamage, missile._midist, missile._mitype, isDamageShifted);
-			}
-		} else {
-			Monster &attackingMonster = Monsters[missile._misource];
-			if ((attackingMonster._mFlags & MFLAG_TARGETS_MONSTER) != 0
-			    && mid > 0
-			    && (Monsters[mid - 1]._mFlags & MFLAG_GOLEM) != 0)
-				isMonsterHit = MonsterTrapHit(mid - 1, minDamage, maxDamage, missile._midist, missile._mitype, isDamageShifted);
-		}
-	} else {
-		if (mid > 0) {
-			if (missile._micaster == TARGET_BOTH)
-				isMonsterHit = MonsterMHit(missile._misource, mid - 1, minDamage, maxDamage, missile._midist, missile._mitype, isDamageShifted);
-			else
-				isMonsterHit = MonsterTrapHit(mid - 1, minDamage, maxDamage, missile._midist, missile._mitype, isDamageShifted);
+	int mid = dMonster[mx][my];
+	if (mid > 0 || (mid != 0 && Monsters[abs(mid) - 1].mode == MonsterMode::Petrified)) {
+		mid = abs(mid) - 1;
+		if (missile.IsTrap()
+		    || (missile._micaster == TARGET_PLAYERS
+		        && (Monsters[missile._misource].flags & MFLAG_TARGETS_MONSTER) != 0
+		        && ((Monsters[mid].flags & MFLAG_GOLEM) != 0 || (Monsters[missile._misource].flags & MFLAG_BERSERK) != 0))) {
+			isMonsterHit = MonsterTrapHit(mid, minDamage, maxDamage, missile._midist, missile._mitype, isDamageShifted);
+		} else if (IsAnyOf(missile._micaster, TARGET_BOTH, TARGET_MONSTERS)) {
+			isMonsterHit = MonsterMHit(missile._misource, mid, minDamage, maxDamage, missile._midist, missile._mitype, isDamageShifted);
 		}
 	}
 
@@ -430,13 +414,13 @@ void CheckMissileCol(Missile &missile, int minDamage, int maxDamage, bool isDama
 		if (missile._micaster != TARGET_BOTH && !missile.IsTrap()) {
 			if (missile._micaster == TARGET_MONSTERS) {
 				if ((pid - 1) != missile._misource)
-					isPlayerHit = Plr2PlrMHit(missile._misource, pid - 1, minDamage, maxDamage, missile._midist, missile._mitype, isDamageShifted, &blocked);
+					isPlayerHit = Plr2PlrMHit(Players[missile._misource], pid - 1, minDamage, maxDamage, missile._midist, missile._mitype, isDamageShifted, &blocked);
 			} else {
 				Monster &monster = Monsters[missile._misource];
 				isPlayerHit = PlayerMHit(pid - 1, &monster, missile._midist, minDamage, maxDamage, missile._mitype, isDamageShifted, 0, &blocked);
 			}
 		} else {
-			int earflag = (missile._miAnimType == MFILE_FIREWAL || missile._miAnimType == MFILE_LGHNING) ? 1 : 0;
+			int earflag = (!missile.IsTrap() && (missile._miAnimType == MFILE_FIREWAL || missile._miAnimType == MFILE_LGHNING)) ? 1 : 0;
 			isPlayerHit = PlayerMHit(pid - 1, nullptr, missile._midist, minDamage, maxDamage, missile._mitype, isDamageShifted, earflag, &blocked);
 		}
 	}
@@ -610,13 +594,13 @@ bool GuardianTryFireAt(Missile &missile, Point target)
 	if (mid < 0)
 		return false;
 	const Monster &monster = Monsters[mid];
-	if (monster.MType->mtype == MT_GOLEM)
+	if (monster.type().type == MT_GOLEM)
 		return false;
-	if (monster._mhitpoints >> 6 <= 0)
+	if (monster.hitPoints >> 6 <= 0)
 		return false;
 
 	Direction dir = GetDirection(position, target);
-	AddMissile(position, target, dir, MIS_FIREBOLT, TARGET_MONSTERS, missile._misource, missile._midam, GetSpellLevel(missile._misource, SPL_FIREBOLT), &missile);
+	AddMissile(position, target, dir, MIS_FIREBOLT, TARGET_MONSTERS, missile._misource, missile._midam, Players[missile._misource].GetSpellLevel(SPL_FIREBOLT), &missile);
 	SetMissDir(missile, 2);
 	missile.var2 = 3;
 
@@ -657,7 +641,7 @@ void SpawnLightning(Missile &missile, int dam)
 		if (position != Point { missile.var1, missile.var2 } && InDungeonBounds(position)) {
 			missile_id type = MIS_LIGHTNING;
 			if (!missile.IsTrap() && missile._micaster == TARGET_PLAYERS
-			    && IsAnyOf(Monsters[missile._misource].MType->mtype, MT_STORM, MT_RSTORM, MT_STORML, MT_MAEL)) {
+			    && IsAnyOf(Monsters[missile._misource].type().type, MT_STORM, MT_RSTORM, MT_STORML, MT_MAEL)) {
 				type = MIS_LIGHTNING2;
 			}
 			AddMissile(
@@ -696,14 +680,14 @@ bool IsMissileBlockedByTile(Point tile)
 	return object != nullptr && !object->_oMissFlag;
 }
 
-void GetDamageAmt(int i, int *mind, int *maxd)
+void GetDamageAmt(spell_id i, int *mind, int *maxd)
 {
 	assert(MyPlayerId >= 0 && MyPlayerId < MAX_PLRS);
 	assert(i >= 0 && i < 64);
 
 	Player &myPlayer = *MyPlayer;
 
-	int sl = myPlayer._pSplLvl[i] + myPlayer._pISplLvlAdd;
+	const int sl = myPlayer.GetSpellLevel(i);
 
 	switch (i) {
 	case SPL_FIREBOLT:
@@ -815,17 +799,9 @@ void GetDamageAmt(int i, int *mind, int *maxd)
 		*mind = (myPlayer._pMagic / 2) + 3 * sl - (myPlayer._pMagic / 8);
 		*maxd = *mind;
 		break;
+	default:
+		break;
 	}
-}
-
-int GetSpellLevel(int playerId, spell_id sn)
-{
-	if (playerId != MyPlayerId)
-		return 1; // BUGFIX spell level will be wrong in multiplayer
-
-	Player &player = Players[playerId];
-
-	return std::max(player._pISplLvlAdd + player._pSplLvl[sn], 0);
 }
 
 Direction16 GetDirection16(Point p1, Point p2)
@@ -864,44 +840,44 @@ Direction16 GetDirection16(Point p1, Point p2)
 	return ret;
 }
 
-bool MonsterTrapHit(int m, int mindam, int maxdam, int dist, missile_id t, bool shift)
+bool MonsterTrapHit(int monsterId, int mindam, int maxdam, int dist, missile_id t, bool shift)
 {
-	auto &monster = Monsters[m];
+	auto &monster = Monsters[monsterId];
 
-	if (!monster.IsPossibleToHit() || monster.IsImmune(t))
+	if (!monster.isPossibleToHit() || monster.isImmune(t))
 		return false;
 
 	int hit = GenerateRnd(100);
-	int hper = 90 - (BYTE)monster.mArmorClass - dist;
+	int hper = 90 - (BYTE)monster.armorClass - dist;
 	hper = clamp(hper, 5, 95);
-	if (monster.TryLiftGargoyle())
+	if (monster.tryLiftGargoyle())
 		return true;
-	if (hit >= hper && monster._mmode != MonsterMode::Petrified) {
+	if (hit >= hper && monster.mode != MonsterMode::Petrified) {
 #ifdef _DEBUG
 		if (!DebugGodMode)
 #endif
 			return false;
 	}
 
-	bool resist = monster.IsResistant(t);
+	bool resist = monster.isResistant(t);
 	int dam = mindam + GenerateRnd(maxdam - mindam + 1);
 	if (!shift)
 		dam <<= 6;
 	if (resist)
-		monster._mhitpoints -= dam / 4;
+		monster.hitPoints -= dam / 4;
 	else
-		monster._mhitpoints -= dam;
+		monster.hitPoints -= dam;
 #ifdef _DEBUG
 	if (DebugGodMode)
-		monster._mhitpoints = 0;
+		monster.hitPoints = 0;
 #endif
-	if (monster._mhitpoints >> 6 <= 0) {
-		M_StartKill(m, -1);
+	if (monster.hitPoints >> 6 <= 0) {
+		StartMonsterDeath(monster, -1, true);
 	} else if (resist) {
 		PlayEffect(monster, 1);
 	} else {
-		if (monster.MType->mtype != MT_GOLEM)
-			M_StartHit(m, -1, dam);
+		if (monster.type().type != MT_GOLEM)
+			M_StartHit(monster, dam);
 	}
 	return true;
 }
@@ -910,7 +886,7 @@ bool PlayerMHit(int pnum, Monster *monster, int dist, int mind, int maxd, missil
 {
 	*blocked = false;
 
-	Player &player = Players[pnum];
+	const Player &player = Players[pnum];
 
 	if (player._pHitPoints >> 6 <= 0) {
 		return false;
@@ -933,15 +909,15 @@ bool PlayerMHit(int pnum, Monster *monster, int dist, int mind, int maxd, missil
 	if (MissilesData[mtype].mType == 0) {
 		int tac = player.GetArmor();
 		if (monster != nullptr) {
-			hper = monster->mHit
-			    + ((monster->mLevel - player._pLevel) * 2)
+			hper = monster->hit
+			    + ((monster->level - player._pLevel) * 2)
 			    + 30
 			    - (dist * 2) - tac;
 		} else {
 			hper = 100 - (tac / 2) - (dist * 2);
 		}
 	} else if (monster != nullptr) {
-		hper += (monster->mLevel * 2) - (player._pLevel * 2) - (dist * 2);
+		hper += (monster->level * 2) - (player._pLevel * 2) - (dist * 2);
 	}
 
 	int minhit = 10;
@@ -965,7 +941,7 @@ bool PlayerMHit(int pnum, Monster *monster, int dist, int mind, int maxd, missil
 
 	int blkper = player.GetBlockChance(false);
 	if (monster != nullptr)
-		blkper -= (monster->mLevel - player._pLevel) * 2;
+		blkper -= (monster->level - player._pLevel) * 2;
 	blkper = clamp(blkper, 0, 100);
 
 	int8_t resper;
@@ -1058,8 +1034,7 @@ void InitMissiles()
 	if (myPlayer._pInfraFlag) {
 		for (auto &missile : Missiles) {
 			if (missile._mitype == MIS_INFRA) {
-				int src = missile._misource;
-				if (src == MyPlayerId)
+				if (missile._misource == MyPlayerId)
 					CalcPlrItemVals(myPlayer, true);
 			}
 		}
@@ -1139,10 +1114,10 @@ void AddReflection(Missile &missile, const AddMissileParameter & /*parameter*/)
 	if (player.wReflections + add >= std::numeric_limits<uint16_t>::max())
 		add = 0;
 	player.wReflections += add;
-	if (missile._misource == MyPlayerId)
+	if (&player == MyPlayer)
 		NetSendCmdParam1(true, CMD_SETREFLECT, player.wReflections);
 
-	UseMana(missile._misource, SPL_REFLECT);
+	UseMana(player, SPL_REFLECT);
 }
 
 void AddBerserk(Missile &missile, const AddMissileParameter &parameter)
@@ -1163,17 +1138,17 @@ void AddBerserk(Missile &missile, const AddMissileParameter &parameter)
 			    return false;
 
 		    const Monster &monster = Monsters[monsterId];
-		    if (monster.MType->mtype == MT_GOLEM)
+		    if (monster.type().type == MT_GOLEM)
 			    return false;
-		    if ((monster._mFlags & MFLAG_BERSERK) != 0)
+		    if ((monster.flags & MFLAG_BERSERK) != 0)
 			    return false;
-		    if (monster._uniqtype != 0 || monster._mAi == AI_DIABLO)
+		    if (monster.uniqType != 0 || monster.ai == AI_DIABLO)
 			    return false;
-		    if (IsAnyOf(monster._mmode, MonsterMode::FadeIn, MonsterMode::FadeOut, MonsterMode::Charge))
+		    if (IsAnyOf(monster.mode, MonsterMode::FadeIn, MonsterMode::FadeOut, MonsterMode::Charge))
 			    return false;
-		    if ((monster.mMagicRes & IMMUNE_MAGIC) != 0)
+		    if ((monster.magicResistance & IMMUNE_MAGIC) != 0)
 			    return false;
-		    if ((monster.mMagicRes & RESIST_MAGIC) != 0 && ((monster.mMagicRes & RESIST_MAGIC) != 1 || GenerateRnd(2) != 0))
+		    if ((monster.magicResistance & RESIST_MAGIC) != 0 && ((monster.magicResistance & RESIST_MAGIC) != 1 || GenerateRnd(2) != 0))
 			    return false;
 
 		    return true;
@@ -1182,15 +1157,16 @@ void AddBerserk(Missile &missile, const AddMissileParameter &parameter)
 
 	if (targetMonsterPosition) {
 		auto &monster = Monsters[abs(dMonster[targetMonsterPosition->x][targetMonsterPosition->y]) - 1];
-		int slvl = GetSpellLevel(missile._misource, SPL_BERSERK);
-		monster._mFlags |= MFLAG_BERSERK | MFLAG_GOLEM;
-		monster.mMinDamage = (GenerateRnd(10) + 120) * monster.mMinDamage / 100 + slvl;
-		monster.mMaxDamage = (GenerateRnd(10) + 120) * monster.mMaxDamage / 100 + slvl;
-		monster.mMinDamage2 = (GenerateRnd(10) + 120) * monster.mMinDamage2 / 100 + slvl;
-		monster.mMaxDamage2 = (GenerateRnd(10) + 120) * monster.mMaxDamage2 / 100 + slvl;
+		Player &player = Players[missile._misource];
+		const int slvl = player.GetSpellLevel(SPL_BERSERK);
+		monster.flags |= MFLAG_BERSERK | MFLAG_GOLEM;
+		monster.minDamage = (GenerateRnd(10) + 120) * monster.minDamage / 100 + slvl;
+		monster.maxDamage = (GenerateRnd(10) + 120) * monster.maxDamage / 100 + slvl;
+		monster.minDamage2 = (GenerateRnd(10) + 120) * monster.minDamage2 / 100 + slvl;
+		monster.maxDamage2 = (GenerateRnd(10) + 120) * monster.maxDamage2 / 100 + slvl;
 		int lightRadius = leveltype == DTYPE_NEST ? 9 : 3;
-		monster.mlid = AddLight(monster.position.tile, lightRadius);
-		UseMana(missile._misource, SPL_BERSERK);
+		monster.lightId = AddLight(monster.position.tile, lightRadius);
+		UseMana(player, SPL_BERSERK);
 	}
 }
 
@@ -1224,7 +1200,7 @@ void AddJester(Missile &missile, const AddMissileParameter &parameter)
 		break;
 	case 6:
 		spell = MIS_TOWN;
-		UseMana(missile._misource, SPL_TOWN);
+		UseMana(Players[missile._misource], SPL_TOWN);
 		break;
 	case 7:
 		spell = MIS_TELEPORT;
@@ -1243,10 +1219,8 @@ void AddJester(Missile &missile, const AddMissileParameter &parameter)
 void AddStealPotions(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
 	for (int i = 0; i < 3; i++) {
-		int k = CrawlNum[i];
-		int ck = k + 2;
-		for (auto j = static_cast<uint8_t>(CrawlTable[k]); j > 0; j--, ck += 2) {
-			Point target = missile.position.start + Displacement { CrawlTable[ck - 1], CrawlTable[ck] };
+		for (auto displacement : CrawlTable[i]) {
+			Point target = missile.position.start + displacement;
 			if (!InDungeonBounds(target))
 				continue;
 			int8_t pnum = dPlayer[target.x][target.y];
@@ -1255,7 +1229,7 @@ void AddStealPotions(Missile &missile, const AddMissileParameter & /*parameter*/
 			Player &player = Players[abs(pnum) - 1];
 
 			bool hasPlayedSFX = false;
-			for (int si = 0; si < MAXBELTITEMS; si++) {
+			for (int si = 0; si < MaxBeltItems; si++) {
 				int ii = -1;
 				if (player.SpdList[si]._itype == ItemType::Misc) {
 					if (GenerateRnd(2) == 0)
@@ -1336,7 +1310,7 @@ void AddSpecArrow(Missile &missile, const AddMissileParameter &parameter)
 	int av = 0;
 
 	if (missile._micaster == TARGET_MONSTERS) {
-		Player &player = Players[missile._misource];
+		const Player &player = Players[missile._misource];
 
 		if (player._pClass == HeroClass::Rogue)
 			av += (player._pLevel - 1) / 4;
@@ -1361,11 +1335,13 @@ void AddSpecArrow(Missile &missile, const AddMissileParameter &parameter)
 
 void AddWarp(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	int minDistanceSq = std::numeric_limits<int>::max();
 	Point src = missile.position.start;
 	Point tile = src;
 	if (missile._misource >= 0) {
-		tile = Players[missile._misource].position.tile;
+		tile = player.position.tile;
 	}
 
 	for (int i = 0; i < numtrigs && i < MAXTRIGGERS; i++) {
@@ -1388,7 +1364,7 @@ void AddWarp(Missile &missile, const AddMissileParameter & /*parameter*/)
 	missile._mirange = 2;
 	missile.position.tile = tile;
 	if (missile._micaster == TARGET_MONSTERS)
-		UseMana(missile._misource, SPL_WARP);
+		UseMana(player, SPL_WARP);
 }
 
 void AddLightningWall(Missile &missile, const AddMissileParameter &parameter)
@@ -1478,7 +1454,7 @@ void AddMana(Missile &missile, const AddMissileParameter & /*parameter*/)
 	player._pManaBase += manaAmount;
 	if (player._pManaBase > player._pMaxManaBase)
 		player._pManaBase = player._pMaxManaBase;
-	UseMana(missile._misource, SPL_MANA);
+	UseMana(player, SPL_MANA);
 	missile._miDelFlag = true;
 	drawmanaflag = true;
 }
@@ -1489,7 +1465,7 @@ void AddMagi(Missile &missile, const AddMissileParameter & /*parameter*/)
 
 	player._pMana = player._pMaxMana;
 	player._pManaBase = player._pMaxManaBase;
-	UseMana(missile._misource, SPL_MAGI);
+	UseMana(player, SPL_MAGI);
 	missile._miDelFlag = true;
 	drawmanaflag = true;
 }
@@ -1497,7 +1473,7 @@ void AddMagi(Missile &missile, const AddMissileParameter & /*parameter*/)
 void AddRing(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
 	if (missile._micaster == TARGET_MONSTERS)
-		UseMana(missile._misource, SPL_FIRERING);
+		UseMana(Players[missile._misource], SPL_FIRERING);
 	missile.var1 = missile.position.start.x;
 	missile.var2 = missile.position.start.y;
 	missile._mirange = 7;
@@ -1505,14 +1481,16 @@ void AddRing(Missile &missile, const AddMissileParameter & /*parameter*/)
 
 void AddSearch(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
-	if (missile._misource == MyPlayerId)
+	Player &player = Players[missile._misource];
+
+	if (&player == MyPlayer)
 		AutoMapShowItems = true;
 	int lvl = 2;
 	if (missile._misource >= 0)
-		lvl = Players[missile._misource]._pLevel * 2;
+		lvl = player._pLevel * 2;
 	missile._mirange = lvl + 10 * missile._mispllvl + 245;
 	if (missile._micaster == TARGET_MONSTERS)
-		UseMana(missile._misource, SPL_SEARCH);
+		UseMana(player, SPL_SEARCH);
 
 	for (auto &other : Missiles) {
 		if (&other != &missile && other._misource == missile._misource && other._mitype == MIS_SEARCH) {
@@ -1553,7 +1531,7 @@ void AddLArrow(Missile &missile, const AddMissileParameter &parameter)
 	}
 	int av = 32;
 	if (missile._micaster == TARGET_MONSTERS) {
-		Player &player = Players[missile._misource];
+		const Player &player = Players[missile._misource];
 		if (player._pClass == HeroClass::Rogue)
 			av += (player._pLevel) / 4;
 		else if (IsAnyOf(player._pClass, HeroClass::Warrior, HeroClass::Bard))
@@ -1590,7 +1568,7 @@ void AddArrow(Missile &missile, const AddMissileParameter &parameter)
 	}
 	int av = 32;
 	if (missile._micaster == TARGET_MONSTERS) {
-		Player &player = Players[missile._misource];
+		const Player &player = Players[missile._misource];
 
 		if (HasAnyOf(player._pIFlags, ItemSpecialEffect::RandomArrowVelocity)) {
 			av = GenerateRnd(32) + 16;
@@ -1670,7 +1648,7 @@ void AddRndTeleport(Missile &missile, const AddMissileParameter &parameter)
 	missile.position.tile = targets[std::max<int32_t>(GenerateRnd(count), 0)];
 
 	if (missile._micaster == TARGET_MONSTERS)
-		UseMana(missile._misource, SPL_RNDTELEPORT);
+		UseMana(player, SPL_RNDTELEPORT);
 }
 
 void AddFirebolt(Missile &missile, const AddMissileParameter &parameter)
@@ -1687,7 +1665,7 @@ void AddFirebolt(Missile &missile, const AddMissileParameter &parameter)
 		}
 
 		if (parameter.pParent == nullptr || parameter.pParent->_mitype != MIS_GUARDIAN)
-			UseMana(missile._misource, SPL_FIREBOLT);
+			UseMana(Players[missile._misource], SPL_FIREBOLT);
 	}
 	UpdateMissileVelocity(missile, dst, sp);
 	SetMissDir(missile, GetDirection16(missile.position.start, dst));
@@ -1714,8 +1692,10 @@ void AddMagmaball(Missile &missile, const AddMissileParameter &parameter)
 
 void AddTeleport(Missile &missile, const AddMissileParameter &parameter)
 {
+	Player &player = Players[missile._misource];
+
 	std::optional<Point> teleportDestination = FindClosestValidPosition(
-	    [&player = Players[missile._misource]](Point target) {
+	    [&player](Point target) {
 		    return PosOkPlayer(player, target);
 	    },
 	    parameter.dst, 0, 5);
@@ -1723,7 +1703,7 @@ void AddTeleport(Missile &missile, const AddMissileParameter &parameter)
 	if (teleportDestination) {
 		missile.position.tile = *teleportDestination;
 		missile.position.start = *teleportDestination;
-		UseMana(missile._misource, SPL_TELEPORT);
+		UseMana(player, SPL_TELEPORT);
 		missile._mirange = 2;
 	} else {
 		missile._miDelFlag = true;
@@ -1735,7 +1715,7 @@ void AddLightball(Missile &missile, const AddMissileParameter &parameter)
 	UpdateMissileVelocity(missile, parameter.dst, 16);
 	missile._miAnimFrame = GenerateRnd(8) + 1;
 	missile._mirange = 255;
-	const Point position { missile._misource < 0 ? missile.position.start : Players[missile._misource].position.tile };
+	const Point position { missile._misource < 0 ? missile.position.start : Point(Players[missile._misource].position.tile) };
 	missile.var1 = position.x;
 	missile.var2 = position.y;
 }
@@ -1767,11 +1747,12 @@ void AddFireball(Missile &missile, const AddMissileParameter &parameter)
 	int sp = 16;
 	if (missile._micaster == TARGET_MONSTERS) {
 		sp += std::min(missile._mispllvl * 2, 34);
+		Player &player = Players[missile._misource];
 
-		int dmg = 2 * (Players[missile._misource]._pLevel + GenerateRndSum(10, 2)) + 4;
+		int dmg = 2 * (player._pLevel + GenerateRndSum(10, 2)) + 4;
 		missile._midam = ScaleSpellEffect(dmg, missile._mispllvl);
 
-		UseMana(missile._misource, SPL_FIREBALL);
+		UseMana(player, SPL_FIREBALL);
 	}
 	UpdateMissileVelocity(missile, dst, sp);
 	SetMissDir(missile, GetDirection16(missile.position.start, dst));
@@ -1784,7 +1765,7 @@ void AddFireball(Missile &missile, const AddMissileParameter &parameter)
 void AddLightctrl(Missile &missile, const AddMissileParameter &parameter)
 {
 	if (missile._midam == 0 && missile._micaster == TARGET_MONSTERS)
-		UseMana(missile._misource, SPL_LIGHTNING);
+		UseMana(Players[missile._misource], SPL_LIGHTNING);
 	missile.var1 = missile.position.start.x;
 	missile.var2 = missile.position.start.y;
 	UpdateMissileVelocity(missile, parameter.dst, 32);
@@ -1799,7 +1780,7 @@ void AddLightning(Missile &missile, const AddMissileParameter &parameter)
 	missile._miAnimFrame = GenerateRnd(8) + 1;
 
 	if (missile._micaster == TARGET_PLAYERS || missile.IsTrap()) {
-		if (missile.IsTrap() || Monsters[missile._misource].MType->mtype == MT_FAMILIAR)
+		if (missile.IsTrap() || Monsters[missile._misource].type().type == MT_FAMILIAR)
 			missile._mirange = 8;
 		else
 			missile._mirange = 10;
@@ -1812,7 +1793,7 @@ void AddLightning(Missile &missile, const AddMissileParameter &parameter)
 void AddMisexp(Missile &missile, const AddMissileParameter &parameter)
 {
 	if (missile._micaster != TARGET_MONSTERS && missile._misource >= 0) {
-		switch (Monsters[missile._misource].MType->mtype) {
+		switch (Monsters[missile._misource].type().type) {
 		case MT_SUCCUBUS:
 			SetMissAnim(missile, MFILE_FLAREEXP);
 			break;
@@ -1907,12 +1888,13 @@ void AddFlash(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
 	if (!missile.IsTrap()) {
 		if (missile._micaster == TARGET_MONSTERS) {
-			int dmg = GenerateRndSum(20, Players[missile._misource]._pLevel + 1) + Players[missile._misource]._pLevel + 1;
+			Player &player = Players[missile._misource];
+			int dmg = GenerateRndSum(20, player._pLevel + 1) + player._pLevel + 1;
 			missile._midam = ScaleSpellEffect(dmg, missile._mispllvl);
 			missile._midam += missile._midam / 2;
-			UseMana(missile._misource, SPL_FLASH);
+			UseMana(player, SPL_FLASH);
 		} else {
-			missile._midam = Monsters[missile._misource].mLevel * 2;
+			missile._midam = Monsters[missile._misource].level * 2;
 		}
 	} else {
 		missile._midam = currlevel / 2;
@@ -1940,20 +1922,17 @@ void AddManashield(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
 	missile._miDelFlag = true;
 
-	if (missile._misource < 0)
-		return;
-
 	Player &player = Players[missile._misource];
 
 	if (player.pManaShield)
 		return;
 
 	player.pManaShield = true;
-	if (missile._misource == MyPlayerId)
+	if (&player == MyPlayer)
 		NetSendCmd(true, CMD_SETSHIELD);
 
 	if (missile._micaster == TARGET_MONSTERS)
-		UseMana(missile._misource, SPL_MANASHIELD);
+		UseMana(player, SPL_MANASHIELD);
 }
 
 void AddFiremove(Missile &missile, const AddMissileParameter &parameter)
@@ -2004,7 +1983,7 @@ void AddGuardian(Missile &missile, const AddMissileParameter &parameter)
 	missile._miDelFlag = false;
 	missile.position.tile = *spawnPosition;
 	missile.position.start = *spawnPosition;
-	UseMana(missile._misource, SPL_GUARDIAN);
+	UseMana(player, SPL_GUARDIAN);
 
 	missile._mlid = AddLight(missile.position.tile, 1);
 	missile._mirange = missile._mispllvl + (player._pLevel / 2);
@@ -2025,19 +2004,19 @@ void AddChain(Missile &missile, const AddMissileParameter &parameter)
 	missile.var1 = parameter.dst.x;
 	missile.var2 = parameter.dst.y;
 	missile._mirange = 1;
-	UseMana(missile._misource, SPL_CHAIN);
+	UseMana(Players[missile._misource], SPL_CHAIN);
 }
 
 namespace {
 void InitMissileAnimationFromMonster(Missile &mis, Direction midir, const Monster &mon, MonsterGraphic graphic)
 {
-	const AnimStruct &anim = mon.MType->GetAnimData(graphic);
+	const AnimStruct &anim = mon.type().getAnimData(graphic);
 	mis._mimfnum = static_cast<int32_t>(midir);
 	mis._miAnimFlags = MissileDataFlags::None;
-	CelSprite celSprite = *anim.GetCelSpritesForDirection(midir);
+	CelSprite celSprite = *anim.getCelSpritesForDirection(midir);
 	mis._miAnimData = celSprite.Data();
-	mis._miAnimDelay = anim.Rate;
-	mis._miAnimLen = anim.Frames;
+	mis._miAnimDelay = anim.rate;
+	mis._miAnimLen = anim.frames;
 	mis._miAnimWidth = celSprite.Width();
 	mis._miAnimWidth2 = CalculateWidth2(celSprite.Width());
 	mis._miAnimAdd = 1;
@@ -2053,17 +2032,17 @@ void AddRhino(Missile &missile, const AddMissileParameter &parameter)
 	Monster &monster = Monsters[missile._misource];
 
 	MonsterGraphic graphic = MonsterGraphic::Walk;
-	if (IsAnyOf(monster.MType->mtype, MT_HORNED, MT_MUDRUN, MT_FROSTC, MT_OBLORD)) {
+	if (IsAnyOf(monster.type().type, MT_HORNED, MT_MUDRUN, MT_FROSTC, MT_OBLORD)) {
 		graphic = MonsterGraphic::Special;
-	} else if (IsAnyOf(monster.MType->mtype, MT_NSNAKE, MT_RSNAKE, MT_BSNAKE, MT_GSNAKE)) {
+	} else if (IsAnyOf(monster.type().type, MT_NSNAKE, MT_RSNAKE, MT_BSNAKE, MT_GSNAKE)) {
 		graphic = MonsterGraphic::Attack;
 	}
 	UpdateMissileVelocity(missile, parameter.dst, 18);
 	InitMissileAnimationFromMonster(missile, parameter.midir, monster, graphic);
-	if (IsAnyOf(monster.MType->mtype, MT_NSNAKE, MT_RSNAKE, MT_BSNAKE, MT_GSNAKE))
+	if (IsAnyOf(monster.type().type, MT_NSNAKE, MT_RSNAKE, MT_BSNAKE, MT_GSNAKE))
 		missile._miAnimFrame = 7;
-	if (monster._uniqtype != 0) {
-		missile._mlid = monster.mlid;
+	if (monster.uniqType != 0) {
+		missile._mlid = monster.lightId;
 	}
 	PutMissile(missile);
 }
@@ -2080,17 +2059,17 @@ void AddFlare(Missile &missile, const AddMissileParameter &parameter)
 	missile.var2 = missile.position.start.y;
 	missile._mlid = AddLight(missile.position.start, 8);
 	if (missile._micaster == TARGET_MONSTERS) {
-		UseMana(missile._misource, SPL_FLARE);
+		UseMana(Players[missile._misource], SPL_FLARE);
 		ApplyPlrDamage(missile._misource, 5);
 	} else if (missile._misource > 0) {
 		auto &monster = Monsters[missile._misource];
-		if (monster.MType->mtype == MT_SUCCUBUS)
+		if (monster.type().type == MT_SUCCUBUS)
 			SetMissAnim(missile, MFILE_FLARE);
-		if (monster.MType->mtype == MT_SNOWWICH)
+		if (monster.type().type == MT_SNOWWICH)
 			SetMissAnim(missile, MFILE_SCUBMISB);
-		if (monster.MType->mtype == MT_HLSPWN)
+		if (monster.type().type == MT_HLSPWN)
 			SetMissAnim(missile, MFILE_SCUBMISD);
-		if (monster.MType->mtype == MT_SOLBRNR)
+		if (monster.type().type == MT_SOLBRNR)
 			SetMissAnim(missile, MFILE_SCUBMISC);
 	}
 
@@ -2104,7 +2083,7 @@ void AddAcid(Missile &missile, const AddMissileParameter &parameter)
 	UpdateMissileVelocity(missile, parameter.dst, 16);
 	SetMissDir(missile, GetDirection16(missile.position.start, parameter.dst));
 	if (!gbIsHellfire || (missile.position.velocity.deltaX & 0xFFFF0000) != 0 || (missile.position.velocity.deltaY & 0xFFFF0000) != 0)
-		missile._mirange = 5 * (Monsters[missile._misource]._mint + 4);
+		missile._mirange = 5 * (Monsters[missile._misource].intelligence + 4);
 	else
 		missile._mirange = 1;
 	missile._mlid = NO_LIGHT;
@@ -2117,7 +2096,7 @@ void AddAcidpud(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
 	missile._miLightFlag = true;
 	int monst = missile._misource;
-	missile._mirange = GenerateRnd(15) + 40 * (Monsters[monst]._mint + 1);
+	missile._mirange = GenerateRnd(15) + 40 * (Monsters[monst].intelligence + 1);
 	missile._miPreFlag = true;
 }
 
@@ -2136,10 +2115,10 @@ void AddStone(Missile &missile, const AddMissileParameter &parameter)
 
 		    auto &monster = Monsters[monsterId];
 
-		    if (IsAnyOf(monster.MType->mtype, MT_GOLEM, MT_DIABLO, MT_NAKRUL)) {
+		    if (IsAnyOf(monster.type().type, MT_GOLEM, MT_DIABLO, MT_NAKRUL)) {
 			    return false;
 		    }
-		    if (IsAnyOf(monster._mmode, MonsterMode::FadeIn, MonsterMode::FadeOut, MonsterMode::Charge)) {
+		    if (IsAnyOf(monster.mode, MonsterMode::FadeIn, MonsterMode::FadeOut, MonsterMode::Charge)) {
 			    return false;
 		    }
 
@@ -2155,20 +2134,22 @@ void AddStone(Missile &missile, const AddMissileParameter &parameter)
 	// Petrify the targeted monster
 	int monsterId = abs(dMonster[targetMonsterPosition->x][targetMonsterPosition->y]) - 1;
 	auto &monster = Monsters[monsterId];
-	missile.var1 = static_cast<int>(monster._mmode);
+	missile.var1 = static_cast<int>(monster.mode);
 	missile.var2 = monsterId;
-	monster.Petrify();
+	monster.petrify();
+
+	Player &player = Players[missile._misource];
 
 	// And set up the missile to unpetrify it in the future
 	missile.position.tile = *targetMonsterPosition;
 	missile.position.start = missile.position.tile;
 	missile._mirange = missile._mispllvl + 6;
-	missile._mirange += (missile._mirange * Players[missile._misource]._pISplDur) / 128;
+	missile._mirange += (missile._mirange * player._pISplDur) / 128;
 
 	if (missile._mirange > 15)
 		missile._mirange = 15;
 	missile._mirange <<= 4;
-	UseMana(missile._misource, SPL_STONE);
+	UseMana(player, SPL_STONE);
 }
 
 void AddGolem(Missile &missile, const AddMissileParameter &parameter)
@@ -2176,16 +2157,12 @@ void AddGolem(Missile &missile, const AddMissileParameter &parameter)
 	missile._miDelFlag = true;
 
 	int playerId = missile._misource;
+	Player &player = Players[playerId];
 
-	for (auto &other : Missiles) {
-		if (other._mitype == MIS_GOLEM && &other != &missile && other._misource == playerId) {
-			return;
-		}
-	}
-	if (Monsters[playerId].position.tile != GolemHoldingCell && playerId == MyPlayerId)
+	if (Monsters[playerId].position.tile != GolemHoldingCell && &player == MyPlayer)
 		M_StartKill(playerId, playerId);
 
-	UseMana(playerId, SPL_GOLEM);
+	UseMana(player, SPL_GOLEM);
 
 	if (Monsters[playerId].position.tile == GolemHoldingCell) {
 		std::optional<Point> spawnPosition = FindClosestValidPosition(
@@ -2225,16 +2202,18 @@ void AddHeal(Missile &missile, const AddMissileParameter & /*parameter*/)
 	player._pHitPoints = std::min(player._pHitPoints + hp, player._pMaxHP);
 	player._pHPBase = std::min(player._pHPBase + hp, player._pMaxHPBase);
 
-	UseMana(missile._misource, SPL_HEAL);
+	UseMana(player, SPL_HEAL);
 	missile._miDelFlag = true;
 	drawhpflag = true;
 }
 
 void AddHealOther(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	missile._miDelFlag = true;
-	UseMana(missile._misource, SPL_HEALOTHER);
-	if (missile._misource == MyPlayerId) {
+	UseMana(player, SPL_HEALOTHER);
+	if (&player == MyPlayer) {
 		NewCursor(CURSOR_HEALOTHER);
 		if (ControlMode != ControlTypes::KeyboardAndMouse)
 			TryIconCurs();
@@ -2248,7 +2227,9 @@ void AddElement(Missile &missile, const AddMissileParameter &parameter)
 		dst += parameter.midir;
 	}
 
-	int dmg = 2 * (Players[missile._misource]._pLevel + GenerateRndSum(10, 2)) + 4;
+	Player &player = Players[missile._misource];
+
+	int dmg = 2 * (player._pLevel + GenerateRndSum(10, 2)) + 4;
 	missile._midam = ScaleSpellEffect(dmg, missile._mispllvl) / 2;
 
 	UpdateMissileVelocity(missile, dst, 16);
@@ -2259,16 +2240,18 @@ void AddElement(Missile &missile, const AddMissileParameter &parameter)
 	missile.var4 = dst.x;
 	missile.var5 = dst.y;
 	missile._mlid = AddLight(missile.position.start, 8);
-	UseMana(missile._misource, SPL_ELEMENT);
+	UseMana(player, SPL_ELEMENT);
 }
 
 extern void FocusOnInventory();
 
 void AddIdentify(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	missile._miDelFlag = true;
-	UseMana(missile._misource, SPL_IDENTIFY);
-	if (missile._misource == MyPlayerId) {
+	UseMana(player, SPL_IDENTIFY);
+	if (&player == MyPlayer) {
 		if (sbookflag)
 			sbookflag = false;
 		if (!invflag) {
@@ -2301,16 +2284,18 @@ void AddFirewallC(Missile &missile, const AddMissileParameter &parameter)
 	missile.var3 = static_cast<int>(Left(Left(parameter.midir)));
 	missile.var4 = static_cast<int>(Right(Right(parameter.midir)));
 	missile._mirange = 7;
-	UseMana(missile._misource, SPL_FIREWALL);
+	UseMana(Players[missile._misource], SPL_FIREWALL);
 }
 
 void AddInfra(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	missile._mirange = ScaleSpellEffect(1584, missile._mispllvl);
-	missile._mirange += missile._mirange * Players[missile._misource]._pISplDur / 128;
+	missile._mirange += missile._mirange * player._pISplDur / 128;
 
 	if (missile._micaster == TARGET_MONSTERS)
-		UseMana(missile._misource, SPL_INFRA);
+		UseMana(player, SPL_INFRA);
 }
 
 void AddWave(Missile &missile, const AddMissileParameter &parameter)
@@ -2319,20 +2304,22 @@ void AddWave(Missile &missile, const AddMissileParameter &parameter)
 	missile.var2 = parameter.dst.y;
 	missile._mirange = 1;
 	missile._miAnimFrame = 4;
-	UseMana(missile._misource, SPL_WAVE);
+	UseMana(Players[missile._misource], SPL_WAVE);
 }
 
 void AddNova(Missile &missile, const AddMissileParameter &parameter)
 {
+	Player &player = Players[missile._misource];
+
 	missile.var1 = parameter.dst.x;
 	missile.var2 = parameter.dst.y;
 
 	if (!missile.IsTrap()) {
-		int dmg = GenerateRndSum(6, 5) + Players[missile._misource]._pLevel + 5;
+		int dmg = GenerateRndSum(6, 5) + player._pLevel + 5;
 		missile._midam = ScaleSpellEffect(dmg / 2, missile._mispllvl);
 
 		if (missile._micaster == TARGET_MONSTERS)
-			UseMana(missile._misource, SPL_NOVA);
+			UseMana(player, SPL_NOVA);
 	} else {
 		missile._midam = (currlevel / 2) + GenerateRndSum(3, 3);
 	}
@@ -2349,7 +2336,7 @@ void AddBlodboil(Missile &missile, const AddMissileParameter & /*parameter*/)
 		return;
 	}
 
-	UseMana(missile._misource, SPL_BLODBOIL);
+	UseMana(player, SPL_BLODBOIL);
 	int tmp = 3 * player._pLevel;
 	tmp <<= 7;
 	player._pSpellFlags |= SpellFlag::RageActive;
@@ -2363,9 +2350,11 @@ void AddBlodboil(Missile &missile, const AddMissileParameter & /*parameter*/)
 
 void AddRepair(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	missile._miDelFlag = true;
-	UseMana(missile._misource, SPL_REPAIR);
-	if (missile._misource == MyPlayerId) {
+	UseMana(player, SPL_REPAIR);
+	if (&player == MyPlayer) {
 		if (sbookflag)
 			sbookflag = false;
 		if (!invflag) {
@@ -2379,9 +2368,11 @@ void AddRepair(Missile &missile, const AddMissileParameter & /*parameter*/)
 
 void AddRecharge(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	missile._miDelFlag = true;
-	UseMana(missile._misource, SPL_RECHARGE);
-	if (missile._misource == MyPlayerId) {
+	UseMana(player, SPL_RECHARGE);
+	if (&player == MyPlayer) {
 		if (sbookflag)
 			sbookflag = false;
 		if (!invflag) {
@@ -2395,9 +2386,11 @@ void AddRecharge(Missile &missile, const AddMissileParameter & /*parameter*/)
 
 void AddDisarm(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	missile._miDelFlag = true;
-	UseMana(missile._misource, SPL_DISARM);
-	if (missile._misource == MyPlayerId) {
+	UseMana(player, SPL_DISARM);
+	if (&player == MyPlayer) {
 		NewCursor(CURSOR_DISARM);
 		if (ControlMode != ControlTypes::KeyboardAndMouse) {
 			if (pcursobj != -1)
@@ -2410,16 +2403,18 @@ void AddDisarm(Missile &missile, const AddMissileParameter & /*parameter*/)
 
 void AddApoca(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	missile.var1 = 8;
 	missile.var2 = std::max(missile.position.start.y - 8, 1);
 	missile.var3 = std::min(missile.position.start.y + 8, MAXDUNY - 1);
 	missile.var4 = std::max(missile.position.start.x - 8, 1);
 	missile.var5 = std::min(missile.position.start.x + 8, MAXDUNX - 1);
 	missile.var6 = missile.var4;
-	int playerLevel = Players[missile._misource]._pLevel;
+	int playerLevel = player._pLevel;
 	missile._midam = GenerateRndSum(6, playerLevel) + playerLevel;
 	missile._mirange = 255;
-	UseMana(missile._misource, SPL_APOCA);
+	UseMana(player, SPL_APOCA);
 }
 
 void AddFlame(Missile &missile, const AddMissileParameter &parameter)
@@ -2434,7 +2429,7 @@ void AddFlame(Missile &missile, const AddMissileParameter &parameter)
 		missile._midam = 8 * i + 16 + ((8 * i + 16) / 2);
 	} else {
 		auto &monster = Monsters[missile._misource];
-		missile._midam = monster.mMinDamage + GenerateRnd(monster.mMaxDamage - monster.mMinDamage + 1);
+		missile._midam = monster.minDamage + GenerateRnd(monster.maxDamage - monster.minDamage + 1);
 	}
 }
 
@@ -2446,7 +2441,7 @@ void AddFlamec(Missile &missile, const AddMissileParameter &parameter)
 	}
 	UpdateMissileVelocity(missile, dst, 32);
 	if (missile._micaster == TARGET_MONSTERS) {
-		UseMana(missile._misource, SPL_FLAME);
+		UseMana(Players[missile._misource], SPL_FLAME);
 	}
 	missile.var1 = missile.position.start.x;
 	missile.var2 = missile.position.start.y;
@@ -2482,20 +2477,24 @@ void AddHbolt(Missile &missile, const AddMissileParameter &parameter)
 		sp += std::min(missile._mispllvl * 2, 47);
 	}
 
+	Player &player = Players[missile._misource];
+
 	UpdateMissileVelocity(missile, dst, sp);
 	SetMissDir(missile, GetDirection16(missile.position.start, dst));
 	missile._mirange = 256;
 	missile.var1 = missile.position.start.x;
 	missile.var2 = missile.position.start.y;
 	missile._mlid = AddLight(missile.position.start, 8);
-	missile._midam = GenerateRnd(10) + Players[missile._misource]._pLevel + 9;
-	UseMana(missile._misource, SPL_HBOLT);
+	missile._midam = GenerateRnd(10) + player._pLevel + 9;
+	UseMana(player, SPL_HBOLT);
 }
 
 void AddResurrect(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
-	UseMana(missile._misource, SPL_RESURRECT);
-	if (missile._misource == MyPlayerId) {
+	Player &player = Players[missile._misource];
+
+	UseMana(player, SPL_RESURRECT);
+	if (&player == MyPlayer) {
 		NewCursor(CURSOR_RESURRECT);
 		if (ControlMode != ControlTypes::KeyboardAndMouse)
 			TryIconCurs();
@@ -2512,9 +2511,11 @@ void AddResurrectBeam(Missile &missile, const AddMissileParameter &parameter)
 
 void AddTelekinesis(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
+	Player &player = Players[missile._misource];
+
 	missile._miDelFlag = true;
-	UseMana(missile._misource, SPL_TELEKINESIS);
-	if (missile._misource == MyPlayerId)
+	UseMana(player, SPL_TELEKINESIS);
+	if (&player == MyPlayer)
 		NewCursor(CURSOR_TELEKINESIS);
 }
 
@@ -2533,7 +2534,7 @@ void AddBoneSpirit(Missile &missile, const AddMissileParameter &parameter)
 	missile.var5 = dst.y;
 	missile._mlid = AddLight(missile.position.start, 8);
 	if (missile._micaster == TARGET_MONSTERS) {
-		UseMana(missile._misource, SPL_BONESPIRIT);
+		UseMana(Players[missile._misource], SPL_BONESPIRIT);
 		ApplyPlrDamage(missile._misource, 6);
 	}
 }
@@ -2549,7 +2550,7 @@ void AddDiabApoca(Missile &missile, const AddMissileParameter & /*parameter*/)
 {
 	int players = gbIsMultiplayer ? MAX_PLRS : 1;
 	for (int pnum = 0; pnum < players; pnum++) {
-		Player &player = Players[pnum];
+		const Player &player = Players[pnum];
 		if (!player.plractive)
 			continue;
 		if (!LineClearMissile(missile.position.start, player.position.future))
@@ -2586,8 +2587,8 @@ Missile *AddMissile(Point src, Point dst, Direction midir, missile_id mitype, mi
 
 	if (!missile.IsTrap() && micaster == TARGET_PLAYERS) {
 		Monster &monster = Monsters[id];
-		if (monster._uniqtype != 0) {
-			missile._miUniqTrans = monster._uniqtrans + 1;
+		if (monster.uniqType != 0) {
+			missile._miUniqTrans = monster.uniqTrans + 1;
 		}
 	}
 
@@ -2618,13 +2619,13 @@ void MI_LArrow(Missile &missile)
 		missile._midist++;
 		if (!missile.IsTrap()) {
 			if (missile._micaster == TARGET_MONSTERS) {
-				Player &player = Players[p];
+				const Player &player = Players[p];
 				mind = player._pIMinDam;
 				maxd = player._pIMaxDam;
 			} else {
 				Monster &monster = Monsters[p];
-				mind = monster.mMinDamage;
-				maxd = monster.mMaxDamage;
+				mind = monster.minDamage;
+				maxd = monster.maxDamage;
 			}
 		} else {
 			mind = GenerateRnd(10) + 1 + currlevel;
@@ -2648,7 +2649,7 @@ void MI_LArrow(Missile &missile)
 			switch (missile._mitype) {
 			case MIS_LARROW:
 				if (!missile.IsTrap()) {
-					Player &player = Players[p];
+					const Player &player = Players[p];
 					eMind = player._pILMinDam;
 					eMaxd = player._pILMaxDam;
 				} else {
@@ -2660,7 +2661,7 @@ void MI_LArrow(Missile &missile)
 				break;
 			case MIS_FARROW:
 				if (!missile.IsTrap()) {
-					Player &player = Players[p];
+					const Player &player = Players[p];
 					eMind = player._pIFMinDam;
 					eMaxd = player._pIFMaxDam;
 				} else {
@@ -2671,6 +2672,7 @@ void MI_LArrow(Missile &missile)
 				eRst = MISR_FIRE;
 				break;
 			default:
+				app_fatal(fmt::format("wrong missile ID {}", static_cast<int>(missile._mitype)));
 				break;
 			}
 			SetMissAnim(missile, eAnim);
@@ -2702,13 +2704,13 @@ void MI_Arrow(Missile &missile)
 	int maxd;
 	if (!missile.IsTrap()) {
 		if (missile._micaster == TARGET_MONSTERS) {
-			Player &player = Players[p];
+			const Player &player = Players[p];
 			mind = player._pIMinDam;
 			maxd = player._pIMaxDam;
 		} else {
 			auto &monster = Monsters[p];
-			mind = monster.mMinDamage;
-			maxd = monster.mMaxDamage;
+			mind = monster.minDamage;
+			maxd = monster.maxDamage;
 		}
 	} else {
 		mind = currlevel;
@@ -2729,7 +2731,7 @@ void MI_Firebolt(Missile &missile)
 		int p = missile._misource;
 		if (!missile.IsTrap()) {
 			if (missile._micaster == TARGET_MONSTERS) {
-				Player &player = Players[p];
+				const Player &player = Players[p];
 				switch (missile._mitype) {
 				case MIS_FIREBOLT:
 					d = GenerateRnd(10) + (player._pMagic / 8) + missile._mispllvl + 1;
@@ -2745,7 +2747,7 @@ void MI_Firebolt(Missile &missile)
 				}
 			} else {
 				auto &monster = Monsters[p];
-				d = monster.mMinDamage + GenerateRnd(monster.mMaxDamage - monster.mMinDamage + 1);
+				d = monster.minDamage + GenerateRnd(monster.maxDamage - monster.minDamage + 1);
 			}
 		} else {
 			d = currlevel + GenerateRnd(2 * currlevel);
@@ -2881,8 +2883,6 @@ void MI_Fireball(Missile &missile)
 {
 	missile._mirange--;
 
-	int id = missile._misource;
-
 	if (missile._miAnimType == MFILE_BIGEXP) {
 		if (missile._mirange == 0) {
 			missile._miDelFlag = true;
@@ -2893,9 +2893,9 @@ void MI_Fireball(Missile &missile)
 		int maxDam = missile._midam;
 
 		if (missile._micaster != TARGET_MONSTERS) {
-			auto &monster = Monsters[id];
-			minDam = monster.mMinDamage;
-			maxDam = monster.mMaxDamage;
+			auto &monster = Monsters[missile._misource];
+			minDam = monster.minDamage;
+			maxDam = monster.maxDamage;
 		}
 		MoveMissileAndCheckMissileCol(missile, minDam, maxDam, true, false);
 		if (missile._mirange == 0) {
@@ -2952,9 +2952,9 @@ void MI_HorkSpawn(Missile &missile)
 
 		if (spawnPosition) {
 			auto facing = static_cast<Direction>(missile.var1);
-			int monsterId = AddMonster(*spawnPosition, facing, 1, true);
-			if (monsterId != -1) {
-				M_StartStand(Monsters[monsterId], facing);
+			Monster *monster = AddMonster(*spawnPosition, facing, 1, true);
+			if (monster != nullptr) {
+				M_StartStand(*monster, facing);
 			}
 		}
 	} else {
@@ -3017,10 +3017,11 @@ void MI_FireRing(Missile &missile)
 	uint8_t lvl = missile._micaster == TARGET_MONSTERS ? Players[src]._pLevel : currlevel;
 	int dmg = 16 * (GenerateRndSum(10, 2) + lvl + 2) / 2;
 
-	int k = CrawlNum[3];
-	int ck = k + 2;
-	for (auto j = static_cast<uint8_t>(CrawlTable[k]); j > 0; j--, ck += 2) {
-		Point target { missile.var1 + CrawlTable[ck - 1], missile.var2 + CrawlTable[ck] };
+	if (missile.limitReached)
+		return;
+
+	for (auto displacement : CrawlTable[3]) {
+		Point target = Point { missile.var1, missile.var2 } + displacement;
 		if (!InDungeonBounds(target))
 			continue;
 		int dp = dPiece[target.x][target.y];
@@ -3030,9 +3031,9 @@ void MI_FireRing(Missile &missile)
 			continue;
 		if (!LineClearMissile(missile.position.tile, target))
 			continue;
-		if (TileHasAny(dp, TileProperties::BlockMissile) || missile.limitReached) {
+		if (TileHasAny(dp, TileProperties::BlockMissile)) {
 			missile.limitReached = true;
-			continue;
+			return;
 		}
 
 		AddMissile(target, target, Direction::South, MIS_FIREWALL, TARGET_BOTH, src, dmg, missile._mispllvl);
@@ -3045,9 +3046,11 @@ void MI_Search(Missile &missile)
 	if (missile._mirange != 0)
 		return;
 
+	const Player &player = Players[missile._misource];
+
 	missile._miDelFlag = true;
-	PlaySfxLoc(IS_CAST7, Players[missile._misource].position.tile);
-	if (missile._misource == MyPlayerId)
+	PlaySfxLoc(IS_CAST7, player.position.tile);
+	if (&player == MyPlayer)
 		AutoMapShowItems = false;
 }
 
@@ -3088,10 +3091,8 @@ void MI_LightningWallC(Missile &missile)
 	}
 }
 
-void MI_FireNova(Missile &missile)
+void MI_NovaCommon(Missile &missile, missile_id projectileType)
 {
-	int sx1 = 0;
-	int sy1 = 0;
 	int id = missile._misource;
 	int dam = missile._midam;
 	Point src = missile.position.tile;
@@ -3101,18 +3102,27 @@ void MI_FireNova(Missile &missile)
 		dir = Players[id]._pdir;
 		en = TARGET_MONSTERS;
 	}
-	for (const auto &k : VisionCrawlTable) {
-		if (sx1 != k[6] || sy1 != k[7]) {
-			Displacement offsets[] = { { k[6], k[7] }, { -k[6], -k[7] }, { -k[6], +k[7] }, { +k[6], -k[7] } };
-			for (Displacement offset : offsets)
-				AddMissile(src, src + offset, dir, MIS_FIRENOVA, en, id, dam, missile._mispllvl);
-			sx1 = k[6];
-			sy1 = k[7];
-		}
+
+	constexpr std::array<Displacement, 9> quarterRadius = { { { 4, 0 }, { 4, 1 }, { 4, 2 }, { 4, 3 }, { 4, 4 }, { 3, 4 }, { 2, 4 }, { 1, 4 }, { 0, 4 } } };
+	for (Displacement quarterOffset : quarterRadius) {
+		// This ends up with two missiles targeting offsets 4,0, 0,4, -4,0, 0,-4.
+		std::array<Displacement, 4> offsets { quarterOffset, quarterOffset.flipXY(), quarterOffset.flipX(), quarterOffset.flipY() };
+		for (Displacement offset : offsets)
+			AddMissile(src, src + offset, dir, projectileType, en, id, dam, missile._mispllvl);
 	}
 	missile._mirange--;
 	if (missile._mirange == 0)
 		missile._miDelFlag = true;
+}
+
+void MI_FireNova(Missile &missile)
+{
+	MI_NovaCommon(missile, MIS_FIRENOVA);
+}
+
+void MI_Nova(Missile &missile)
+{
+	MI_NovaCommon(missile, MIS_LIGHTBALL);
 }
 
 void MI_SpecArrow(Missile &missile)
@@ -3126,7 +3136,7 @@ void MI_SpecArrow(Missile &missile)
 	Direction dir = Direction::South;
 	mienemy_type micaster = TARGET_PLAYERS;
 	if (!missile.IsTrap()) {
-		Player &player = Players[id];
+		const Player &player = Players[id];
 		dir = player._pdir;
 		micaster = TARGET_MONSTERS;
 
@@ -3154,7 +3164,7 @@ void MI_Lightctrl(Missile &missile)
 		dam = (GenerateRnd(2) + GenerateRnd(Players[missile._misource]._pLevel) + 2) << 6;
 	} else {
 		auto &monster = Monsters[missile._misource];
-		dam = 2 * (monster.mMinDamage + GenerateRnd(monster.mMaxDamage - monster.mMinDamage + 1));
+		dam = 2 * (monster.minDamage + GenerateRnd(monster.maxDamage - monster.minDamage + 1));
 	}
 
 	SpawnLightning(missile, dam);
@@ -3352,14 +3362,10 @@ void MI_Chain(Missile &missile)
 	Point dst { missile.var1, missile.var2 };
 	Direction dir = GetDirection(position, dst);
 	AddMissile(position, dst, dir, MIS_LIGHTCTRL, TARGET_MONSTERS, id, 1, missile._mispllvl);
-	int rad = missile._mispllvl + 3;
-	if (rad > 19)
-		rad = 19;
+	int rad = std::min<int>(missile._mispllvl + 3, CrawlTable.size() - 1);
 	for (int i = 1; i < rad; i++) {
-		int k = CrawlNum[i];
-		int ck = k + 2;
-		for (auto j = static_cast<uint8_t>(CrawlTable[k]); j > 0; j--, ck += 2) {
-			Point target = position + Displacement { CrawlTable[ck - 1], CrawlTable[ck] };
+		for (auto displacement : CrawlTable[i]) {
+			Point target = position + displacement;
 			if (InDungeonBounds(target) && dMonster[target.x][target.y] > 0) {
 				dir = GetDirection(position, target);
 				AddMissile(position, target, dir, MIS_LIGHTCTRL, TARGET_MONSTERS, id, 1, missile._mispllvl);
@@ -3376,16 +3382,16 @@ void MI_Weapexp(Missile &missile)
 	constexpr int ExpLight[10] = { 9, 10, 11, 12, 11, 10, 8, 6, 4, 2 };
 
 	missile._mirange--;
-	int id = missile._misource;
+	const Player &player = Players[missile._misource];
 	int mind;
 	int maxd;
 	if (missile.var2 == 1) {
-		mind = Players[id]._pIFMinDam;
-		maxd = Players[id]._pIFMaxDam;
+		mind = player._pIFMinDam;
+		maxd = player._pIFMaxDam;
 		MissilesData[missile._mitype].mResist = MISR_FIRE;
 	} else {
-		mind = Players[id]._pILMinDam;
-		maxd = Players[id]._pILMaxDam;
+		mind = player._pILMinDam;
+		maxd = player._pILMaxDam;
 		MissilesData[missile._mitype].mResist = MISR_LIGHTNING;
 	}
 	CheckMissileCol(missile, mind, maxd, false, missile.position.tile, false);
@@ -3432,7 +3438,7 @@ void MI_Acidsplat(Missile &missile)
 	if (missile._mirange == 0) {
 		missile._miDelFlag = true;
 		int monst = missile._misource;
-		int dam = (Monsters[monst].MData->mLevel >= 2 ? 2 : 1);
+		int dam = (Monsters[monst].data().mLevel >= 2 ? 2 : 1);
 		AddMissile(missile.position.tile, { 0, 0 }, Direction::South, MIS_ACIDPUD, TARGET_PLAYERS, monst, dam, missile._mispllvl);
 	} else {
 		PutMissile(missile);
@@ -3462,7 +3468,7 @@ void MI_Teleport(Missile &missile)
 		ChangeLightXY(player._plid, player.position.tile);
 		ChangeVisionXY(player._pvid, player.position.tile);
 	}
-	if (id == MyPlayerId) {
+	if (&player == MyPlayer) {
 		ViewPosition = Point { 0, 0 } + (player.position.tile - ScrollInfo.tile);
 	}
 }
@@ -3471,24 +3477,24 @@ void MI_Stone(Missile &missile)
 {
 	missile._mirange--;
 	auto &monster = Monsters[missile.var2];
-	if (monster._mhitpoints == 0 && missile._miAnimType != MFILE_SHATTER1) {
+	if (monster.hitPoints == 0 && missile._miAnimType != MFILE_SHATTER1) {
 		missile._mimfnum = 0;
 		missile._miDrawFlag = true;
 		SetMissAnim(missile, MFILE_SHATTER1);
 		missile._mirange = 11;
 	}
-	if (monster._mmode != MonsterMode::Petrified) {
+	if (monster.mode != MonsterMode::Petrified) {
 		missile._miDelFlag = true;
 		return;
 	}
 
 	if (missile._mirange == 0) {
 		missile._miDelFlag = true;
-		if (monster._mhitpoints > 0) {
-			monster._mmode = static_cast<MonsterMode>(missile.var1);
-			monster.AnimInfo.IsPetrified = false;
+		if (monster.hitPoints > 0) {
+			monster.mode = static_cast<MonsterMode>(missile.var1);
+			monster.animInfo.isPetrified = false;
 		} else {
-			AddCorpse(monster.position.tile, stonendx, monster._mdir);
+			AddCorpse(monster.position.tile, stonendx, monster.direction);
 		}
 	}
 	if (missile._miAnimType == MFILE_SHATTER1)
@@ -3511,7 +3517,7 @@ void MI_Rhino(Missile &missile)
 {
 	int monst = missile._misource;
 	auto &monster = Monsters[monst];
-	if (monster._mmode != MonsterMode::Charge) {
+	if (monster.mode != MonsterMode::Charge) {
 		missile._miDelFlag = true;
 		return;
 	}
@@ -3519,7 +3525,7 @@ void MI_Rhino(Missile &missile)
 	Point prevPos = missile.position.tile;
 	Point newPosSnake;
 	dMonster[prevPos.x][prevPos.y] = 0;
-	if (monster._mAi == AI_SNAKE) {
+	if (monster.ai == AI_SNAKE) {
 		missile.position.traveled += missile.position.velocity * 2;
 		UpdateMissilePos(missile);
 		newPosSnake = missile.position.tile;
@@ -3529,7 +3535,7 @@ void MI_Rhino(Missile &missile)
 	}
 	UpdateMissilePos(missile);
 	Point newPos = missile.position.tile;
-	if (!IsTileAvailable(monster, newPos) || (monster._mAi == AI_SNAKE && !IsTileAvailable(monster, newPosSnake))) {
+	if (!IsTileAvailable(monster, newPos) || (monster.ai == AI_SNAKE && !IsTileAvailable(monster, newPosSnake))) {
 		MissToMonst(missile, prevPos);
 		missile._miDelFlag = true;
 		return;
@@ -3538,7 +3544,7 @@ void MI_Rhino(Missile &missile)
 	monster.position.old = newPos;
 	monster.position.tile = newPos;
 	dMonster[newPos.x][newPos.y] = -(monst + 1);
-	if (monster._uniqtype != 0)
+	if (monster.uniqType != 0)
 		ChangeLightXY(missile._mlid, newPos);
 	MoveMissilePos(missile);
 	PutMissile(missile);
@@ -3597,7 +3603,7 @@ void MI_Apoca(Missile &missile)
 			int mid = dMonster[k][j] - 1;
 			if (mid < 0)
 				continue;
-			if (Monsters[mid].MType->mtype == MT_GOLEM)
+			if (Monsters[mid].type().type == MT_GOLEM)
 				continue;
 			if (TileHasAny(dPiece[k][j], TileProperties::Solid))
 				continue;
@@ -3653,34 +3659,6 @@ void MI_Wave(Missile &missile)
 		}
 	}
 
-	missile._mirange--;
-	if (missile._mirange == 0)
-		missile._miDelFlag = true;
-}
-
-void MI_Nova(Missile &missile)
-{
-	int sx1 = 0;
-	int sy1 = 0;
-	int id = missile._misource;
-	int dam = missile._midam;
-	Point src = missile.position.tile;
-	Direction dir = Direction::South;
-	mienemy_type en = TARGET_PLAYERS;
-	if (!missile.IsTrap()) {
-		dir = Players[id]._pdir;
-		en = TARGET_MONSTERS;
-	}
-	for (const auto &k : VisionCrawlTable) {
-		if (sx1 != k[6] || sy1 != k[7]) {
-			AddMissile(src, src + Displacement { k[6], k[7] }, dir, MIS_LIGHTBALL, en, id, dam, missile._mispllvl);
-			AddMissile(src, src + Displacement { -k[6], -k[7] }, dir, MIS_LIGHTBALL, en, id, dam, missile._mispllvl);
-			AddMissile(src, src + Displacement { -k[6], k[7] }, dir, MIS_LIGHTBALL, en, id, dam, missile._mispllvl);
-			AddMissile(src, src + Displacement { k[6], -k[7] }, dir, MIS_LIGHTBALL, en, id, dam, missile._mispllvl);
-			sx1 = k[6];
-			sy1 = k[7];
-		}
-	}
 	missile._mirange--;
 	if (missile._mirange == 0)
 		missile._miDelFlag = true;
@@ -3743,7 +3721,6 @@ void MI_Flame(Missile &missile)
 void MI_Flamec(Missile &missile)
 {
 	missile._mirange--;
-	int src = missile._misource;
 	missile.position.traveled += missile.position.velocity;
 	UpdateMissilePos(missile);
 	if (missile.position.tile != Point { missile.var1, missile.var2 }) {
@@ -3755,7 +3732,7 @@ void MI_Flamec(Missile &missile)
 			    Direction::South,
 			    MIS_FLAME,
 			    missile._micaster,
-			    src,
+			    missile._misource,
 			    missile.var3,
 			    missile._mispllvl);
 		} else {
@@ -3842,12 +3819,11 @@ void MI_Element(Missile &missile)
 {
 	missile._mirange--;
 	int dam = missile._midam;
-	int id = missile._misource;
 	const Point missilePosition = missile.position.tile;
 	if (missile._miAnimType == MFILE_BIGEXP) {
 		ChangeLight(missile._mlid, missile.position.tile, missile._miAnimFrame);
 
-		Point startPoint = missile.var3 == 2 ? Point { missile.var4, missile.var5 } : missile.position.start;
+		Point startPoint = missile.var3 == 2 ? Point { missile.var4, missile.var5 } : Point(missile.position.start);
 		constexpr Displacement Offsets[] = { { 0, 0 }, { 0, 1 }, { 0, -1 }, { 1, 0 }, { 1, -1 }, { 1, 1 }, { -1, 0 }, { -1, 1 }, { -1, -1 } };
 		for (Displacement offset : Offsets) {
 			if (!CheckBlock(startPoint, missilePosition + offset))
@@ -3871,7 +3847,7 @@ void MI_Element(Missile &missile)
 				SetMissDir(missile, sd);
 				UpdateMissileVelocity(missile, nextMonster->position.tile, 16);
 			} else {
-				Direction sd = Players[id]._pdir;
+				Direction sd = Players[missile._misource]._pdir;
 				SetMissDir(missile, sd);
 				UpdateMissileVelocity(missile, missilePosition + sd, 16);
 			}
@@ -3895,7 +3871,6 @@ void MI_Bonespirit(Missile &missile)
 {
 	missile._mirange--;
 	int dam = missile._midam;
-	int id = missile._misource;
 	if (missile._mimfnum == 8) {
 		ChangeLight(missile._mlid, missile.position.tile, missile._miAnimFrame);
 		if (missile._mirange == 0) {
@@ -3913,11 +3888,11 @@ void MI_Bonespirit(Missile &missile)
 			missile._mirange = 255;
 			auto *monster = FindClosest(c, 19);
 			if (monster != nullptr) {
-				missile._midam = monster->_mhitpoints >> 7;
+				missile._midam = monster->hitPoints >> 7;
 				SetMissDir(missile, GetDirection(c, monster->position.tile));
 				UpdateMissileVelocity(missile, monster->position.tile, 16);
 			} else {
-				Direction sd = Players[id]._pdir;
+				Direction sd = Players[missile._misource]._pdir;
 				SetMissDir(missile, sd);
 				UpdateMissileVelocity(missile, c + sd, 16);
 			}
@@ -4024,17 +3999,17 @@ void missiles_process_charge()
 		if (missile._mitype != MIS_RHINO)
 			continue;
 
-		CMonster *mon = Monsters[missile._misource].MType;
+		const CMonster &mon = Monsters[missile._misource].type();
 
 		MonsterGraphic graphic;
-		if (IsAnyOf(mon->mtype, MT_HORNED, MT_MUDRUN, MT_FROSTC, MT_OBLORD)) {
+		if (IsAnyOf(mon.type, MT_HORNED, MT_MUDRUN, MT_FROSTC, MT_OBLORD)) {
 			graphic = MonsterGraphic::Special;
-		} else if (IsAnyOf(mon->mtype, MT_NSNAKE, MT_RSNAKE, MT_BSNAKE, MT_GSNAKE)) {
+		} else if (IsAnyOf(mon.type, MT_NSNAKE, MT_RSNAKE, MT_BSNAKE, MT_GSNAKE)) {
 			graphic = MonsterGraphic::Attack;
 		} else {
 			graphic = MonsterGraphic::Walk;
 		}
-		missile._miAnimData = mon->GetAnimData(graphic).CelSpritesForDirections[missile._mimfnum];
+		missile._miAnimData = mon.getAnimData(graphic).celSpritesForDirections[missile._mimfnum];
 	}
 }
 

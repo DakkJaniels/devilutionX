@@ -85,7 +85,7 @@ Rectangle MainPanel;
 Rectangle LeftPanel;
 Rectangle RightPanel;
 std::optional<OwnedSurface> pBtmBuff;
-std::optional<OwnedCelSprite> pGBoxBuff;
+OptionalOwnedCelSprite pGBoxBuff;
 
 const Rectangle &GetMainPanel()
 {
@@ -135,10 +135,10 @@ namespace {
 
 std::optional<OwnedSurface> pLifeBuff;
 std::optional<OwnedSurface> pManaBuff;
-std::optional<OwnedCelSprite> talkButtons;
-std::optional<OwnedCelSprite> pDurIcons;
-std::optional<OwnedCelSprite> multiButtons;
-std::optional<OwnedCelSprite> pPanelButtons;
+OptionalOwnedCelSprite talkButtons;
+OptionalOwnedCelSprite pDurIcons;
+OptionalOwnedCelSprite multiButtons;
+OptionalOwnedCelSprite pPanelButtons;
 
 bool PanelButtons[8];
 int PanelButtonIndex;
@@ -744,8 +744,8 @@ void CheckPanelInfo()
 				break;
 			case RSPLTYPE_SPELL: {
 				AddPanelString(fmt::format(fmt::runtime(_("{:s} Spell")), pgettext("spell", spelldata[spellId].sNameText)));
-				int c = std::max(myPlayer._pISplLvlAdd + myPlayer._pSplLvl[spellId], 0);
-				AddPanelString(c == 0 ? _("Spell Level 0 - Unusable") : fmt::format(fmt::runtime(_("Spell Level {:d}")), c));
+				const int spellLevel = myPlayer.GetSpellLevel(spellId);
+				AddPanelString(spellLevel == 0 ? _("Spell Level 0 - Unusable") : fmt::format(fmt::runtime(_("Spell Level {:d}")), spellLevel));
 			} break;
 			case RSPLTYPE_SCROLL: {
 				AddPanelString(fmt::format(fmt::runtime(_("Scroll of {:s}")), pgettext("spell", spelldata[spellId].sNameText)));
@@ -905,13 +905,13 @@ void DrawInfoBox(const Surface &out)
 			if (leveltype != DTYPE_TOWN) {
 				const auto &monster = Monsters[pcursmonst];
 				InfoColor = UiFlags::ColorWhite;
-				InfoString = string_view(monster.mName);
+				InfoString = string_view(monster.name);
 				ClearPanel();
-				if (monster._uniqtype != 0) {
+				if (monster.uniqType != 0) {
 					InfoColor = UiFlags::ColorWhitegold;
 					PrintUniqueHistory();
 				} else {
-					PrintMonstHistory(monster.MType->mtype);
+					PrintMonstHistory(monster.type().type);
 				}
 			} else if (pcursitem == -1) {
 				InfoString = string_view(Towners[pcursmonst].name);

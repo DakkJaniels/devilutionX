@@ -23,7 +23,7 @@ void RepeatWalk(Player &player)
 	if (!InDungeonBounds(cursPosition))
 		return;
 
-	if (player._pmode != PM_STAND && !(player.IsWalking() && player.AnimInfo.GetFrameToUseForRendering() > 6))
+	if (player._pmode != PM_STAND && !(player.IsWalking() && player.AnimInfo.getFrameToUseForRendering() > 6))
 		return;
 
 	const Point target = player.GetTargetPosition();
@@ -39,8 +39,8 @@ void InvalidateTargets()
 {
 	if (pcursmonst != -1) {
 		const Monster &monster = Monsters[pcursmonst];
-		if (monster._mDelFlag || monster._mhitpoints >> 6 <= 0
-		    || (monster._mFlags & MFLAG_HIDDEN) != 0
+		if (monster.isInvalid || monster.hitPoints >> 6 <= 0
+		    || (monster.flags & MFLAG_HIDDEN) != 0
 		    || !IsTileLit(monster.position.tile)) {
 			pcursmonst = -1;
 		}

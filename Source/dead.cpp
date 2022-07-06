@@ -18,29 +18,29 @@ int8_t stonendx;
 namespace {
 void InitDeadAnimationFromMonster(Corpse &corpse, const CMonster &mon)
 {
-	const auto &animData = mon.GetAnimData(MonsterGraphic::Death);
-	memcpy(&corpse.data[0], &animData.CelSpritesForDirections[0], sizeof(animData.CelSpritesForDirections[0]) * animData.CelSpritesForDirections.size());
-	corpse.frame = animData.Frames - 1;
-	corpse.width = animData.Width;
+	const auto &animData = mon.getAnimData(MonsterGraphic::Death);
+	memcpy(&corpse.data[0], &animData.celSpritesForDirections[0], sizeof(animData.celSpritesForDirections[0]) * animData.celSpritesForDirections.size());
+	corpse.frame = animData.frames - 1;
+	corpse.width = animData.width;
 }
 } // namespace
 
 void InitCorpses()
 {
-	int8_t mtypes[MAXMONSTERS] = {};
+	int8_t mtypes[MaxMonsters] = {};
 
 	int8_t nd = 0;
 
 	for (int i = 0; i < LevelMonsterTypeCount; i++) {
-		if (mtypes[LevelMonsterTypes[i].mtype] != 0)
+		if (mtypes[LevelMonsterTypes[i].type] != 0)
 			continue;
 
 		InitDeadAnimationFromMonster(Corpses[nd], LevelMonsterTypes[i]);
 		Corpses[nd].translationPaletteIndex = 0;
 		nd++;
 
-		LevelMonsterTypes[i].mdeadval = nd;
-		mtypes[LevelMonsterTypes[i].mtype] = nd;
+		LevelMonsterTypes[i].corpseId = nd;
+		mtypes[LevelMonsterTypes[i].type] = nd;
 	}
 
 	nd++; // Unused blood spatter
@@ -57,12 +57,12 @@ void InitCorpses()
 
 	for (int i = 0; i < ActiveMonsterCount; i++) {
 		auto &monster = Monsters[ActiveMonsters[i]];
-		if (monster._uniqtype != 0) {
-			InitDeadAnimationFromMonster(Corpses[nd], *monster.MType);
+		if (monster.uniqType != 0) {
+			InitDeadAnimationFromMonster(Corpses[nd], monster.type());
 			Corpses[nd].translationPaletteIndex = ActiveMonsters[i] + 1;
 			nd++;
 
-			monster._udeadval = nd;
+			monster.corpseId = nd;
 		}
 	}
 
@@ -78,12 +78,12 @@ void SyncUniqDead()
 {
 	for (int i = 0; i < ActiveMonsterCount; i++) {
 		auto &monster = Monsters[ActiveMonsters[i]];
-		if (monster._uniqtype == 0)
+		if (monster.uniqType == 0)
 			continue;
 		for (int dx = 0; dx < MAXDUNX; dx++) {
 			for (int dy = 0; dy < MAXDUNY; dy++) {
-				if ((dCorpse[dx][dy] & 0x1F) == monster._udeadval)
-					ChangeLightXY(monster.mlid, { dx, dy });
+				if ((dCorpse[dx][dy] & 0x1F) == monster.corpseId)
+					ChangeLightXY(monster.lightId, { dx, dy });
 			}
 		}
 	}

@@ -333,7 +333,7 @@ bool StoreAutoPlace(Item &item, bool persistItem)
 {
 	Player &player = *MyPlayer;
 
-	if (AutoEquipEnabled(player, item) && AutoEquip(MyPlayerId, item, persistItem)) {
+	if (AutoEquipEnabled(player, item) && AutoEquip(player, item, persistItem)) {
 		return true;
 	}
 
@@ -568,7 +568,7 @@ void StartSmithSell()
 		}
 	}
 
-	for (int i = 0; i < MAXBELTITEMS; i++) {
+	for (int i = 0; i < MaxBeltItems; i++) {
 		if (storenumh >= 48)
 			break;
 		if (SmithSellOk(-(i + 1))) {
@@ -836,7 +836,7 @@ void StartWitchSell()
 		}
 	}
 
-	for (int i = 0; i < MAXBELTITEMS; i++) {
+	for (int i = 0; i < MaxBeltItems; i++) {
 		if (storenumh >= 48)
 			break;
 		if (!myPlayer.SpdList[i].isEmpty() && WitchSellOk(-(i + 1))) {
@@ -1022,7 +1022,7 @@ void StoreConfirm(Item &item)
 		prompt = _("Are you sure you want to repair this item?");
 		break;
 	default:
-		app_fatal("Unknown store dialog %i", stextshold);
+		app_fatal(fmt::format("Unknown store dialog {}", static_cast<int>(stextshold)));
 	}
 	AddSText(0, 15, prompt, UiFlags::ColorWhite | UiFlags::AlignCenter, false);
 	AddSText(0, 18, _("Yes"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);

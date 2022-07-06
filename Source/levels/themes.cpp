@@ -5,6 +5,8 @@
  */
 #include "levels/themes.h"
 
+#include <fmt/core.h>
+
 #include "engine/path.h"
 #include "engine/points_in_rectangle_range.hpp"
 #include "engine/random.hpp"
@@ -146,7 +148,7 @@ bool TFit_SkelRoom(int t)
 	}
 
 	for (int i = 0; i < LevelMonsterTypeCount; i++) {
-		if (IsSkel(LevelMonsterTypes[i].mtype)) {
+		if (IsSkel(LevelMonsterTypes[i].type)) {
 			themeVar1 = i;
 			return TFit_Obj5(t);
 		}
@@ -158,7 +160,7 @@ bool TFit_SkelRoom(int t)
 bool TFit_GoatShrine(int t)
 {
 	for (int i = 0; i < LevelMonsterTypeCount; i++) {
-		if (IsGoat(LevelMonsterTypes[i].mtype)) {
+		if (IsGoat(LevelMonsterTypes[i].type)) {
 			themeVar1 = i;
 			return TFit_Obj5(t);
 		}
@@ -478,7 +480,7 @@ void PlaceThemeMonsts(int t, int f)
 
 	int numscattypes = 0;
 	for (int i = 0; i < LevelMonsterTypeCount; i++) {
-		if ((LevelMonsterTypes[i].mPlaceFlags & PLACE_SCATTER) != 0) {
+		if ((LevelMonsterTypes[i].placeFlags & PLACE_SCATTER) != 0) {
 			scattertypes[numscattypes] = i;
 			numscattypes++;
 		}
@@ -592,50 +594,50 @@ void Theme_SkelRoom(int t)
 	AddObject(OBJ_SKFIRE, { xp, yp });
 
 	if (GenerateRnd(monstrnd[leveltype - 1]) != 0) {
-		int i = PreSpawnSkeleton();
-		SpawnSkeleton(i, { xp - 1, yp - 1 });
+		Monster *skeleton = PreSpawnSkeleton();
+		SpawnSkeleton(skeleton, { xp - 1, yp - 1 });
 	} else {
 		AddObject(OBJ_BANNERL, { xp - 1, yp - 1 });
 	}
 
 	{
-		int i = PreSpawnSkeleton();
-		SpawnSkeleton(i, { xp, yp - 1 });
+		Monster *skeleton = PreSpawnSkeleton();
+		SpawnSkeleton(skeleton, { xp, yp - 1 });
 	}
 
 	if (GenerateRnd(monstrnd[leveltype - 1]) != 0) {
-		int i = PreSpawnSkeleton();
-		SpawnSkeleton(i, { xp + 1, yp - 1 });
+		Monster *skeleton = PreSpawnSkeleton();
+		SpawnSkeleton(skeleton, { xp + 1, yp - 1 });
 	} else {
 		AddObject(OBJ_BANNERR, { xp + 1, yp - 1 });
 	}
 	if (GenerateRnd(monstrnd[leveltype - 1]) != 0) {
-		int i = PreSpawnSkeleton();
-		SpawnSkeleton(i, { xp - 1, yp });
+		Monster *skeleton = PreSpawnSkeleton();
+		SpawnSkeleton(skeleton, { xp - 1, yp });
 	} else {
 		AddObject(OBJ_BANNERM, { xp - 1, yp });
 	}
 	if (GenerateRnd(monstrnd[leveltype - 1]) != 0) {
-		int i = PreSpawnSkeleton();
-		SpawnSkeleton(i, { xp + 1, yp });
+		Monster *skeleton = PreSpawnSkeleton();
+		SpawnSkeleton(skeleton, { xp + 1, yp });
 	} else {
 		AddObject(OBJ_BANNERM, { xp + 1, yp });
 	}
 	if (GenerateRnd(monstrnd[leveltype - 1]) != 0) {
-		int i = PreSpawnSkeleton();
-		SpawnSkeleton(i, { xp - 1, yp + 1 });
+		Monster *skeleton = PreSpawnSkeleton();
+		SpawnSkeleton(skeleton, { xp - 1, yp + 1 });
 	} else {
 		AddObject(OBJ_BANNERR, { xp - 1, yp + 1 });
 	}
 
 	{
-		int i = PreSpawnSkeleton();
-		SpawnSkeleton(i, { xp, yp + 1 });
+		Monster *skeleton = PreSpawnSkeleton();
+		SpawnSkeleton(skeleton, { xp, yp + 1 });
 	}
 
 	if (GenerateRnd(monstrnd[leveltype - 1]) != 0) {
-		int i = PreSpawnSkeleton();
-		SpawnSkeleton(i, { xp + 1, yp + 1 });
+		Monster *skeleton = PreSpawnSkeleton();
+		SpawnSkeleton(skeleton, { xp + 1, yp + 1 });
 	} else {
 		AddObject(OBJ_BANNERL, { xp + 1, yp + 1 });
 	}
@@ -1024,7 +1026,7 @@ void CreateThemeRooms()
 			Theme_WeaponRack(i);
 			break;
 		case THEME_NONE:
-			app_fatal("Unknown theme type: %i", themes[i].ttype);
+			app_fatal(fmt::format("Unknown theme type: {}", static_cast<int>(themes[i].ttype)));
 		}
 	}
 	ApplyObjectLighting = false;

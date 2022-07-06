@@ -11,6 +11,7 @@
 #include <unordered_map>
 
 #include <SDL.h>
+#include <fmt/compile.h>
 
 #include "automap.h"
 #include "codec.h"
@@ -141,6 +142,15 @@ public:
 		return SwapBE(Next<T>());
 	}
 
+	template <class TSource, class TDesired>
+	TDesired NextLENarrow(TSource modifier = 0)
+	{
+		static_assert(std::numeric_limits<TSource>::min() < std::numeric_limits<TDesired>::min());
+		static_assert(std::numeric_limits<TSource>::max() > std::numeric_limits<TDesired>::max());
+		TSource value = SwapLE(Next<TSource>()) + modifier;
+		return static_cast<TDesired>(clamp<TSource>(value, std::numeric_limits<TDesired>::min(), std::numeric_limits<TDesired>::max()));
+	}
+
 	bool NextBool8()
 	{
 		return Next<uint8_t>() != 0;
@@ -229,8 +239,8 @@ void LoadItemData(LoadHelper &file, Item &item)
 	item._iAnimFlag = file.NextBool32();
 	file.Skip(4); // Skip pointer _iAnimData
 	item.AnimInfo = {};
-	item.AnimInfo.NumberOfFrames = file.NextLE<int32_t>();
-	item.AnimInfo.CurrentFrame = file.NextLE<int32_t>() - 1;
+	item.AnimInfo.numberOfFrames = file.NextLENarrow<int32_t, int8_t>();
+	item.AnimInfo.currentFrame = file.NextLENarrow<int32_t, int8_t>(-1);
 	file.Skip(8); // Skip _iAnimWidth and _iAnimWidth2
 	file.Skip(4); // Unused since 1.02
 	item._iSelFlag = file.NextLE<uint8_t>();
@@ -327,7 +337,7 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	player.position.tile.y = file.NextLE<int32_t>();
 	player.position.future.x = file.NextLE<int32_t>();
 	player.position.future.y = file.NextLE<int32_t>();
-	file.Skip(8); // Skip _ptargx and _ptargy
+	file.Skip<uint32_t>(2); // Skip _ptargx and _ptargy
 	player.position.last.x = file.NextLE<int32_t>();
 	player.position.last.y = file.NextLE<int32_t>();
 	player.position.old.x = file.NextLE<int32_t>();
@@ -339,15 +349,13 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	player._pdir = static_cast<Direction>(file.NextLE<int32_t>());
 	file.Skip(4); // Unused
 	player._pgfxnum = file.NextLE<int32_t>();
-	file.Skip(4); // Skip pointer pData
+	file.Skip<uint32_t>(); // Skip pointer pData
 	player.AnimInfo = {};
-	player.AnimInfo.TicksPerFrame = file.NextLE<int32_t>() + 1;
-	player.AnimInfo.TickCounterOfCurrentFrame = file.NextLE<int32_t>();
-	player.AnimInfo.NumberOfFrames = file.NextLE<int32_t>();
-	player.AnimInfo.CurrentFrame = file.NextLE<int32_t>() - 1;
-	file.Skip(4); // Skip _pAnimWidth
-	file.Skip(4); // Skip _pAnimWidth2
-	file.Skip(4); // Skip _peflag
+	player.AnimInfo.ticksPerFrame = file.NextLENarrow<int32_t, int8_t>(1);
+	player.AnimInfo.tickCounterOfCurrentFrame = file.NextLENarrow<int32_t, int8_t>();
+	player.AnimInfo.numberOfFrames = file.NextLENarrow<int32_t, int8_t>();
+	player.AnimInfo.currentFrame = file.NextLENarrow<int32_t, int8_t>(-1);
+	file.Skip<uint32_t>(3); // Skip _pAnimWidth, _pAnimWidth2, _peflag
 	player._plid = file.NextLE<int32_t>();
 	player._pvid = file.NextLE<int32_t>();
 
@@ -386,7 +394,7 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	player._pLightRad = file.NextLE<int8_t>();
 	player._pLvlChanging = file.NextBool8();
 
-	file.NextBytes(player._pName, PLR_NAME_LEN);
+	file.NextBytes(player._pName, PlayerNameLength);
 	player._pClass = static_cast<HeroClass>(file.NextLE<int8_t>());
 	file.Skip(3); // Alignment
 	player._pStrength = file.NextLE<int32_t>();
@@ -406,12 +414,12 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	player._pMaxHPBase = file.NextLE<int32_t>();
 	player._pHitPoints = file.NextLE<int32_t>();
 	player._pMaxHP = file.NextLE<int32_t>();
-	file.Skip(sizeof(int32_t)); // Skip _pHPPer - always derived from hp and maxHP.
+	file.Skip<int32_t>(); // Skip _pHPPer - always derived from hp and maxHP.
 	player._pManaBase = file.NextLE<int32_t>();
 	player._pMaxManaBase = file.NextLE<int32_t>();
 	player._pMana = file.NextLE<int32_t>();
 	player._pMaxMana = file.NextLE<int32_t>();
-	file.Skip(sizeof(int32_t)); // Skip _pManaPer - always derived from mana and maxMana
+	file.Skip<int32_t>(); // Skip _pManaPer - always derived from mana and maxMana
 	player._pLevel = file.NextLE<int8_t>();
 	player._pMaxLvl = file.NextLE<int8_t>();
 	file.Skip(2); // Alignment
@@ -429,10 +437,10 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	player.position.temp.y = file.NextLE<int32_t>();
 	player.tempDirection = static_cast<Direction>(file.NextLE<int32_t>());
 	player.spellLevel = file.NextLE<int32_t>();
-	file.Skip(4); // skip _pVar5, was used for storing position of a tile which should have its HorizontalMovingPlayer flag removed after walking
+	file.Skip<uint32_t>(); // skip _pVar5, was used for storing position of a tile which should have its HorizontalMovingPlayer flag removed after walking
 	player.position.offset2.deltaX = file.NextLE<int32_t>();
 	player.position.offset2.deltaY = file.NextLE<int32_t>();
-	file.Skip(4); // Skip actionFrame
+	file.Skip<uint32_t>(); // Skip actionFrame
 
 	for (uint8_t i = 0; i < giNumberOfLevels; i++)
 		player._pLvlVisited[i] = file.NextBool8();
@@ -440,33 +448,33 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	for (uint8_t i = 0; i < giNumberOfLevels; i++)
 		player._pSLvlVisited[i] = file.NextBool8();
 
-	file.Skip(2);     // Alignment
-	file.Skip(4);     // skip _pGFXLoad
-	file.Skip(4 * 8); // Skip pointers _pNAnim
-	player._pNFrames = file.NextLE<int32_t>();
-	file.Skip(4);     // skip _pNWidth
-	file.Skip(4 * 8); // Skip pointers _pWAnim
-	player._pWFrames = file.NextLE<int32_t>();
-	file.Skip(4);     // skip _pWWidth
-	file.Skip(4 * 8); // Skip pointers _pAAnim
-	player._pAFrames = file.NextLE<int32_t>();
-	file.Skip(4); // skip _pAWidth
-	player._pAFNum = file.NextLE<int32_t>();
-	file.Skip(4 * 8); // Skip pointers _pLAnim
-	file.Skip(4 * 8); // Skip pointers _pFAnim
-	file.Skip(4 * 8); // Skip pointers _pTAnim
-	player._pSFrames = file.NextLE<int32_t>();
-	file.Skip(4); // skip _pSWidth
-	player._pSFNum = file.NextLE<int32_t>();
-	file.Skip(4 * 8); // Skip pointers _pHAnim
-	player._pHFrames = file.NextLE<int32_t>();
-	file.Skip(4);     // skip _pHWidth
-	file.Skip(4 * 8); // Skip pointers _pDAnim
-	player._pDFrames = file.NextLE<int32_t>();
-	file.Skip(4);     // skip _pDWidth
-	file.Skip(4 * 8); // Skip pointers _pBAnim
-	player._pBFrames = file.NextLE<int32_t>();
-	file.Skip(4); // skip _pBWidth
+	file.Skip(2);           // Alignment
+	file.Skip<uint32_t>();  // skip _pGFXLoad
+	file.Skip<uint32_t>(8); // Skip pointers _pNAnim
+	player._pNFrames = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>();  // skip _pNWidth
+	file.Skip<uint32_t>(8); // Skip pointers _pWAnim
+	player._pWFrames = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>();  // skip _pWWidth
+	file.Skip<uint32_t>(8); // Skip pointers _pAAnim
+	player._pAFrames = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>(); // skip _pAWidth
+	player._pAFNum = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>(8); // Skip pointers _pLAnim
+	file.Skip<uint32_t>(8); // Skip pointers _pFAnim
+	file.Skip<uint32_t>(8); // Skip pointers _pTAnim
+	player._pSFrames = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>(); // skip _pSWidth
+	player._pSFNum = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>(8); // Skip pointers _pHAnim
+	player._pHFrames = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>();  // skip _pHWidth
+	file.Skip<uint32_t>(8); // Skip pointers _pDAnim
+	player._pDFrames = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>();  // skip _pDWidth
+	file.Skip<uint32_t>(8); // Skip pointers _pBAnim
+	player._pBFrames = file.NextLENarrow<int32_t, int8_t>();
+	file.Skip<uint32_t>(); // skip _pBWidth
 
 	for (Item &item : player.InvBody)
 		LoadItemData(file, item);
@@ -556,15 +564,15 @@ bool gbSkipSync = false;
 
 void LoadMonster(LoadHelper *file, Monster &monster)
 {
-	monster._mMTidx = file->NextLE<int32_t>();
-	monster._mmode = static_cast<MonsterMode>(file->NextLE<int32_t>());
-	monster._mgoal = static_cast<monster_goal>(file->NextLE<uint8_t>());
+	monster.levelType = file->NextLE<int32_t>();
+	monster.mode = static_cast<MonsterMode>(file->NextLE<int32_t>());
+	monster.goal = static_cast<monster_goal>(file->NextLE<uint8_t>());
 	file->Skip(3); // Alignment
-	monster._mgoalvar1 = file->NextLE<int32_t>();
-	monster._mgoalvar2 = file->NextLE<int32_t>();
-	monster._mgoalvar3 = file->NextLE<int32_t>();
+	monster.goalVar1 = file->NextLE<int32_t>();
+	monster.goalVar2 = file->NextLE<int32_t>();
+	monster.goalVar3 = file->NextLE<int32_t>();
 	file->Skip(4); // Unused
-	monster._pathcount = file->NextLE<uint8_t>();
+	monster.pathCount = file->NextLE<uint8_t>();
 	file->Skip(3); // Alignment
 	monster.position.tile.x = file->NextLE<int32_t>();
 	monster.position.tile.y = file->NextLE<int32_t>();
@@ -576,85 +584,79 @@ void LoadMonster(LoadHelper *file, Monster &monster)
 	monster.position.offset.deltaY = file->NextLE<int32_t>();
 	monster.position.velocity.deltaX = file->NextLE<int32_t>();
 	monster.position.velocity.deltaY = file->NextLE<int32_t>();
-	monster._mdir = static_cast<Direction>(file->NextLE<int32_t>());
-	monster._menemy = file->NextLE<int32_t>();
+	monster.direction = static_cast<Direction>(file->NextLE<int32_t>());
+	monster.enemy = file->NextLE<int32_t>();
 	monster.enemyPosition.x = file->NextLE<uint8_t>();
 	monster.enemyPosition.y = file->NextLE<uint8_t>();
 	file->Skip(2); // Unused
 
 	file->Skip(4); // Skip pointer _mAnimData
-	monster.AnimInfo = {};
-	monster.AnimInfo.TicksPerFrame = file->NextLE<int32_t>();
-	monster.AnimInfo.TickCounterOfCurrentFrame = file->NextLE<int32_t>();
-	monster.AnimInfo.NumberOfFrames = file->NextLE<int32_t>();
-	monster.AnimInfo.CurrentFrame = file->NextLE<int32_t>() - 1;
+	monster.animInfo = {};
+	monster.animInfo.ticksPerFrame = file->NextLENarrow<int32_t, int8_t>();
+	// Ensure that we can increase the tickCounterOfCurrentFrame at least once without overflow (needed for backwards compatibility for sitting gargoyles)
+	monster.animInfo.tickCounterOfCurrentFrame = file->NextLENarrow<int32_t, int8_t>(1) - 1;
+	monster.animInfo.numberOfFrames = file->NextLENarrow<int32_t, int8_t>();
+	monster.animInfo.currentFrame = file->NextLENarrow<int32_t, int8_t>(-1);
 	file->Skip(4); // Skip _meflag
-	monster._mDelFlag = file->NextBool32();
-	monster._mVar1 = file->NextLE<int32_t>();
-	monster._mVar2 = file->NextLE<int32_t>();
-	monster._mVar3 = file->NextLE<int32_t>();
+	monster.isInvalid = file->NextBool32();
+	monster.var1 = file->NextLE<int32_t>();
+	monster.var2 = file->NextLE<int32_t>();
+	monster.var3 = file->NextLE<int32_t>();
 	monster.position.temp.x = file->NextLE<int32_t>();
 	monster.position.temp.y = file->NextLE<int32_t>();
 	monster.position.offset2.deltaX = file->NextLE<int32_t>();
 	monster.position.offset2.deltaY = file->NextLE<int32_t>();
 	file->Skip(4); // Skip actionFrame
-	monster._mmaxhp = file->NextLE<int32_t>();
-	monster._mhitpoints = file->NextLE<int32_t>();
+	monster.maxHitPoints = file->NextLE<int32_t>();
+	monster.hitPoints = file->NextLE<int32_t>();
 
-	monster._mAi = static_cast<_mai_id>(file->NextLE<uint8_t>());
-	monster._mint = file->NextLE<uint8_t>();
+	monster.ai = static_cast<_mai_id>(file->NextLE<uint8_t>());
+	monster.intelligence = file->NextLE<uint8_t>();
 	file->Skip(2); // Alignment
-	monster._mFlags = file->NextLE<uint32_t>();
-	monster._msquelch = file->NextLE<uint8_t>();
+	monster.flags = file->NextLE<uint32_t>();
+	monster.activeForTicks = file->NextLE<uint8_t>();
 	file->Skip(3); // Alignment
 	file->Skip(4); // Unused
 	monster.position.last.x = file->NextLE<int32_t>();
 	monster.position.last.y = file->NextLE<int32_t>();
-	monster._mRndSeed = file->NextLE<uint32_t>();
-	monster._mAISeed = file->NextLE<uint32_t>();
+	monster.rndItemSeed = file->NextLE<uint32_t>();
+	monster.aiSeed = file->NextLE<uint32_t>();
 	file->Skip(4); // Unused
 
-	monster._uniqtype = file->NextLE<uint8_t>();
-	monster._uniqtrans = file->NextLE<uint8_t>();
-	monster._udeadval = file->NextLE<int8_t>();
+	monster.uniqType = file->NextLE<uint8_t>();
+	monster.uniqTrans = file->NextLE<uint8_t>();
+	monster.corpseId = file->NextLE<int8_t>();
 
-	monster.mWhoHit = file->NextLE<int8_t>();
-	monster.mLevel = file->NextLE<int8_t>();
+	monster.whoHit = file->NextLE<int8_t>();
+	monster.level = file->NextLE<int8_t>();
 	file->Skip(1); // Alignment
-	monster.mExp = file->NextLE<uint16_t>();
+	monster.exp = file->NextLE<uint16_t>();
 
-	if ((monster._mFlags & MFLAG_GOLEM) != 0) // Don't skip for golems
-		monster.mHit = file->NextLE<uint8_t>();
+	if ((monster.flags & MFLAG_GOLEM) != 0) // Don't skip for golems
+		monster.hit = file->NextLE<uint8_t>();
 	else
-		file->Skip(1); // Skip mHit as it's already initialized
-	monster.mMinDamage = file->NextLE<uint8_t>();
-	monster.mMaxDamage = file->NextLE<uint8_t>();
-	file->Skip(1); // Skip mHit2 as it's already initialized
-	monster.mMinDamage2 = file->NextLE<uint8_t>();
-	monster.mMaxDamage2 = file->NextLE<uint8_t>();
-	monster.mArmorClass = file->NextLE<uint8_t>();
+		file->Skip(1); // Skip hit as it's already initialized
+	monster.minDamage = file->NextLE<uint8_t>();
+	monster.maxDamage = file->NextLE<uint8_t>();
+	file->Skip(1); // Skip hit2 as it's already initialized
+	monster.minDamage2 = file->NextLE<uint8_t>();
+	monster.maxDamage2 = file->NextLE<uint8_t>();
+	monster.armorClass = file->NextLE<uint8_t>();
 	file->Skip(1); // Alignment
-	monster.mMagicRes = file->NextLE<uint16_t>();
+	monster.magicResistance = file->NextLE<uint16_t>();
 	file->Skip(2); // Alignment
 
-	monster.mtalkmsg = static_cast<_speech_id>(file->NextLE<int32_t>());
-	if (monster.mtalkmsg == TEXT_KING1) // Fix original bad mapping of NONE for monsters
-		monster.mtalkmsg = TEXT_NONE;
+	monster.talkMsg = static_cast<_speech_id>(file->NextLE<int32_t>());
+	if (monster.talkMsg == TEXT_KING1) // Fix original bad mapping of NONE for monsters
+		monster.talkMsg = TEXT_NONE;
 	monster.leader = file->NextLE<uint8_t>();
 	monster.leaderRelation = static_cast<LeaderRelation>(file->NextLE<uint8_t>());
-	monster.packsize = file->NextLE<uint8_t>();
-	monster.mlid = file->NextLE<int8_t>();
-	if (monster.mlid == 0)
-		monster.mlid = NO_LIGHT; // Correct incorect values in old saves
-
-	if ((monster._mFlags & MFLAG_BERSERK) != 0) {
-		int lightRadius = leveltype == DTYPE_NEST ? 9 : 3;
-		monster.mlid = AddLight(monster.position.tile, lightRadius);
-	}
+	monster.packSize = file->NextLE<uint8_t>();
+	monster.lightId = file->NextLE<int8_t>();
+	if (monster.lightId == 0)
+		monster.lightId = NO_LIGHT; // Correct incorect values in old saves
 
 	// Omit pointer mName;
-	// Omit pointer MType;
-	// Omit pointer MData;
 
 	if (gbSkipSync)
 		return;
@@ -667,17 +669,17 @@ void LoadMonster(LoadHelper *file, Monster &monster)
  */
 void SyncPackSize(Monster &leader)
 {
-	if (leader._uniqtype == 0)
+	if (leader.uniqType == 0)
 		return;
-	if (leader._mAi != AI_SCAV)
+	if (leader.ai != AI_SCAV)
 		return;
 
-	leader.packsize = 0;
+	leader.packSize = 0;
 
 	for (int i = 0; i < ActiveMonsterCount; i++) {
 		auto &minion = Monsters[ActiveMonsters[i]];
 		if (minion.leaderRelation == LeaderRelation::Leashed && &Monsters[minion.leader] == &leader)
-			leader.packsize++;
+			leader.packSize++;
 	}
 }
 
@@ -780,7 +782,7 @@ void LoadObject(LoadHelper &file, Object &object)
 	object.position.x = file.NextLE<int32_t>();
 	object.position.y = file.NextLE<int32_t>();
 	object._oLight = file.NextBool32();
-	object._oAnimFlag = file.NextLE<uint32_t>();
+	object._oAnimFlag = file.NextBool32();
 	file.Skip(4); // Skip pointer _oAnimData
 	object._oAnimDelay = file.NextLE<int32_t>();
 	object._oAnimCnt = file.NextLE<int32_t>();
@@ -883,20 +885,28 @@ void LoadPortal(LoadHelper *file, int i)
 	pPortal->setlvl = file->NextBool32();
 }
 
+void GetLevelNames(string_view prefix, char *out)
+{
+	char suf;
+	uint8_t num;
+	if (setlevel) {
+		suf = 's';
+		num = static_cast<uint8_t>(setlvlnum);
+	} else {
+		suf = 'l';
+		num = currlevel;
+	}
+	*fmt::format_to(out, FMT_COMPILE("{}{}{:02d}"), prefix, suf, num) = '\0';
+}
+
 void GetTempLevelNames(char *szTemp)
 {
-	if (setlevel)
-		sprintf(szTemp, "temps%02d", setlvlnum);
-	else
-		sprintf(szTemp, "templ%02d", currlevel);
+	return GetLevelNames("temp", szTemp);
 }
 
 void GetPermLevelNames(char *szPerm)
 {
-	if (setlevel)
-		sprintf(szPerm, "perms%02d", setlvlnum);
-	else
-		sprintf(szPerm, "perml%02d", currlevel);
+	return GetLevelNames("perm", szPerm);
 }
 
 bool LevelFileExists(MpqWriter &archive)
@@ -988,8 +998,8 @@ void SaveItem(SaveHelper &file, const Item &item)
 	file.WriteLE<int32_t>(item.position.y);
 	file.WriteLE<uint32_t>(item._iAnimFlag ? 1 : 0);
 	file.Skip(4); // Skip pointer _iAnimData
-	file.WriteLE<int32_t>(item.AnimInfo.NumberOfFrames);
-	file.WriteLE<int32_t>(item.AnimInfo.CurrentFrame + 1);
+	file.WriteLE<int32_t>(item.AnimInfo.numberOfFrames);
+	file.WriteLE<int32_t>(item.AnimInfo.currentFrame + 1);
 	// write _iAnimWidth for vanilla compatibility
 	file.WriteLE<int32_t>(ItemAnimWidth);
 	// write _iAnimWidth2 for vanilla compatibility
@@ -1095,10 +1105,10 @@ void SavePlayer(SaveHelper &file, const Player &player)
 	file.Skip(4); // Unused
 	file.WriteLE<int32_t>(player._pgfxnum);
 	file.Skip(4); // Skip pointer _pAnimData
-	file.WriteLE<int32_t>(std::max(0, player.AnimInfo.TicksPerFrame - 1));
-	file.WriteLE<int32_t>(player.AnimInfo.TickCounterOfCurrentFrame);
-	file.WriteLE<int32_t>(player.AnimInfo.NumberOfFrames);
-	file.WriteLE<int32_t>(player.AnimInfo.CurrentFrame + 1);
+	file.WriteLE<int32_t>(std::max(0, player.AnimInfo.ticksPerFrame - 1));
+	file.WriteLE<int32_t>(player.AnimInfo.tickCounterOfCurrentFrame);
+	file.WriteLE<int32_t>(player.AnimInfo.numberOfFrames);
+	file.WriteLE<int32_t>(player.AnimInfo.currentFrame + 1);
 	// write _pAnimWidth for vanilla compatibility
 	int animWidth = player.AnimInfo.celSprite ? player.AnimInfo.celSprite->Width() : 96;
 	file.WriteLE<int32_t>(animWidth);
@@ -1145,7 +1155,7 @@ void SavePlayer(SaveHelper &file, const Player &player)
 	file.WriteLE<int8_t>(player._pLightRad);
 	file.WriteLE<uint8_t>(player._pLvlChanging ? 1 : 0);
 
-	file.WriteBytes(player._pName, PLR_NAME_LEN);
+	file.WriteBytes(player._pName, PlayerNameLength);
 	file.WriteLE<int8_t>(static_cast<int8_t>(player._pClass));
 	file.Skip(3); // Alignment
 	file.WriteLE<int32_t>(player._pStrength);
@@ -1198,32 +1208,32 @@ void SavePlayer(SaveHelper &file, const Player &player)
 
 	file.Skip(2); // Alignment
 
-	file.Skip<int32_t>(); // Skip _pGFXLoad
-	file.Skip(4 * 8);     // Skip pointers _pNAnim
+	file.Skip<int32_t>();   // Skip _pGFXLoad
+	file.Skip<uint32_t>(8); // Skip pointers _pNAnim
 	file.WriteLE<int32_t>(player._pNFrames);
-	file.Skip(4);     // Skip _pNWidth
-	file.Skip(4 * 8); // Skip pointers _pWAnim
+	file.Skip<uint32_t>();  // Skip _pNWidth
+	file.Skip<uint32_t>(8); // Skip pointers _pWAnim
 	file.WriteLE<int32_t>(player._pWFrames);
-	file.Skip(4);     // Skip _pWWidth
-	file.Skip(4 * 8); // Skip pointers _pAAnim
+	file.Skip<uint32_t>();  // Skip _pWWidth
+	file.Skip<uint32_t>(8); // Skip pointers _pAAnim
 	file.WriteLE<int32_t>(player._pAFrames);
-	file.Skip(4); // Skip _pAWidth
+	file.Skip<uint32_t>(); // Skip _pAWidth
 	file.WriteLE<int32_t>(player._pAFNum);
-	file.Skip(4 * 8); // Skip pointers _pLAnim
-	file.Skip(4 * 8); // Skip pointers _pFAnim
-	file.Skip(4 * 8); // Skip pointers _pTAnim
+	file.Skip<uint32_t>(8); // Skip pointers _pLAnim
+	file.Skip<uint32_t>(8); // Skip pointers _pFAnim
+	file.Skip<uint32_t>(8); // Skip pointers _pTAnim
 	file.WriteLE<int32_t>(player._pSFrames);
-	file.Skip(4); // Skip _pSWidth
+	file.Skip<uint32_t>(); // Skip _pSWidth
 	file.WriteLE<int32_t>(player._pSFNum);
-	file.Skip(4 * 8); // Skip pointers _pHAnim
+	file.Skip<uint32_t>(8); // Skip pointers _pHAnim
 	file.WriteLE<int32_t>(player._pHFrames);
-	file.Skip(4);     // Skip _pHWidth
-	file.Skip(4 * 8); // Skip pointers _pDAnim
+	file.Skip<uint32_t>();  // Skip _pHWidth
+	file.Skip<uint32_t>(8); // Skip pointers _pDAnim
 	file.WriteLE<int32_t>(player._pDFrames);
-	file.Skip(4);     // Skip _pDWidth
-	file.Skip(4 * 8); // Skip pointers _pBAnim
+	file.Skip<uint32_t>();  // Skip _pDWidth
+	file.Skip<uint32_t>(8); // Skip pointers _pBAnim
 	file.WriteLE<int32_t>(player._pBFrames);
-	file.Skip(4); // Skip _pBWidth
+	file.Skip<uint32_t>(); // Skip _pBWidth
 
 	for (const Item &item : player.InvBody)
 		SaveItem(file, item);
@@ -1296,15 +1306,15 @@ void SavePlayer(SaveHelper &file, const Player &player)
 
 void SaveMonster(SaveHelper *file, Monster &monster)
 {
-	file->WriteLE<int32_t>(monster._mMTidx);
-	file->WriteLE<int32_t>(static_cast<int>(monster._mmode));
-	file->WriteLE<uint8_t>(monster._mgoal);
+	file->WriteLE<int32_t>(monster.levelType);
+	file->WriteLE<int32_t>(static_cast<int>(monster.mode));
+	file->WriteLE<uint8_t>(monster.goal);
 	file->Skip(3); // Alignment
-	file->WriteLE<int32_t>(monster._mgoalvar1);
-	file->WriteLE<int32_t>(monster._mgoalvar2);
-	file->WriteLE<int32_t>(monster._mgoalvar3);
+	file->WriteLE<int32_t>(monster.goalVar1);
+	file->WriteLE<int32_t>(monster.goalVar2);
+	file->WriteLE<int32_t>(monster.goalVar3);
 	file->Skip(4); // Unused
-	file->WriteLE<uint8_t>(monster._pathcount);
+	file->WriteLE<uint8_t>(monster.pathCount);
 	file->Skip(3); // Alignment
 	file->WriteLE<int32_t>(monster.position.tile.x);
 	file->WriteLE<int32_t>(monster.position.tile.y);
@@ -1316,76 +1326,74 @@ void SaveMonster(SaveHelper *file, Monster &monster)
 	file->WriteLE<int32_t>(monster.position.offset.deltaY);
 	file->WriteLE<int32_t>(monster.position.velocity.deltaX);
 	file->WriteLE<int32_t>(monster.position.velocity.deltaY);
-	file->WriteLE<int32_t>(static_cast<int32_t>(monster._mdir));
-	file->WriteLE<int32_t>(monster._menemy);
+	file->WriteLE<int32_t>(static_cast<int32_t>(monster.direction));
+	file->WriteLE<int32_t>(monster.enemy);
 	file->WriteLE<uint8_t>(monster.enemyPosition.x);
 	file->WriteLE<uint8_t>(monster.enemyPosition.y);
 	file->Skip(2); // Unused
 
 	file->Skip(4); // Skip pointer _mAnimData
-	file->WriteLE<int32_t>(monster.AnimInfo.TicksPerFrame);
-	file->WriteLE<int32_t>(monster.AnimInfo.TickCounterOfCurrentFrame);
-	file->WriteLE<int32_t>(monster.AnimInfo.NumberOfFrames);
-	file->WriteLE<int32_t>(monster.AnimInfo.CurrentFrame + 1);
+	file->WriteLE<int32_t>(monster.animInfo.ticksPerFrame);
+	file->WriteLE<int32_t>(monster.animInfo.tickCounterOfCurrentFrame);
+	file->WriteLE<int32_t>(monster.animInfo.numberOfFrames);
+	file->WriteLE<int32_t>(monster.animInfo.currentFrame + 1);
 	file->Skip<uint32_t>(); // Skip _meflag
-	file->WriteLE<uint32_t>(monster._mDelFlag ? 1 : 0);
-	file->WriteLE<int32_t>(monster._mVar1);
-	file->WriteLE<int32_t>(monster._mVar2);
-	file->WriteLE<int32_t>(monster._mVar3);
+	file->WriteLE<uint32_t>(monster.isInvalid ? 1 : 0);
+	file->WriteLE<int32_t>(monster.var1);
+	file->WriteLE<int32_t>(monster.var2);
+	file->WriteLE<int32_t>(monster.var3);
 	file->WriteLE<int32_t>(monster.position.temp.x);
 	file->WriteLE<int32_t>(monster.position.temp.y);
 	file->WriteLE<int32_t>(monster.position.offset2.deltaX);
 	file->WriteLE<int32_t>(monster.position.offset2.deltaY);
 	file->Skip<int32_t>(); // Skip _mVar8
-	file->WriteLE<int32_t>(monster._mmaxhp);
-	file->WriteLE<int32_t>(monster._mhitpoints);
+	file->WriteLE<int32_t>(monster.maxHitPoints);
+	file->WriteLE<int32_t>(monster.hitPoints);
 
-	file->WriteLE<uint8_t>(monster._mAi);
-	file->WriteLE<uint8_t>(monster._mint);
+	file->WriteLE<uint8_t>(monster.ai);
+	file->WriteLE<uint8_t>(monster.intelligence);
 	file->Skip(2); // Alignment
-	file->WriteLE<uint32_t>(monster._mFlags);
-	file->WriteLE<uint8_t>(monster._msquelch);
+	file->WriteLE<uint32_t>(monster.flags);
+	file->WriteLE<uint8_t>(monster.activeForTicks);
 	file->Skip(3); // Alignment
 	file->Skip(4); // Unused
 	file->WriteLE<int32_t>(monster.position.last.x);
 	file->WriteLE<int32_t>(monster.position.last.y);
-	file->WriteLE<uint32_t>(monster._mRndSeed);
-	file->WriteLE<uint32_t>(monster._mAISeed);
+	file->WriteLE<uint32_t>(monster.rndItemSeed);
+	file->WriteLE<uint32_t>(monster.aiSeed);
 	file->Skip(4); // Unused
 
-	file->WriteLE<uint8_t>(monster._uniqtype);
-	file->WriteLE<uint8_t>(monster._uniqtrans);
-	file->WriteLE<int8_t>(monster._udeadval);
+	file->WriteLE<uint8_t>(monster.uniqType);
+	file->WriteLE<uint8_t>(monster.uniqTrans);
+	file->WriteLE<int8_t>(monster.corpseId);
 
-	file->WriteLE<int8_t>(monster.mWhoHit);
-	file->WriteLE<int8_t>(monster.mLevel);
+	file->WriteLE<int8_t>(monster.whoHit);
+	file->WriteLE<int8_t>(monster.level);
 	file->Skip(1); // Alignment
-	file->WriteLE<uint16_t>(monster.mExp);
+	file->WriteLE<uint16_t>(monster.exp);
 
-	file->WriteLE<uint8_t>(static_cast<uint8_t>(std::min<uint16_t>(monster.mHit, std::numeric_limits<uint8_t>::max()))); // For backwards compatibility
-	file->WriteLE<uint8_t>(monster.mMinDamage);
-	file->WriteLE<uint8_t>(monster.mMaxDamage);
-	file->WriteLE<uint8_t>(static_cast<uint8_t>(std::min<uint16_t>(monster.mHit2, std::numeric_limits<uint8_t>::max()))); // For backwards compatibility
-	file->WriteLE<uint8_t>(monster.mMinDamage2);
-	file->WriteLE<uint8_t>(monster.mMaxDamage2);
-	file->WriteLE<uint8_t>(monster.mArmorClass);
+	file->WriteLE<uint8_t>(static_cast<uint8_t>(std::min<uint16_t>(monster.hit, std::numeric_limits<uint8_t>::max()))); // For backwards compatibility
+	file->WriteLE<uint8_t>(monster.minDamage);
+	file->WriteLE<uint8_t>(monster.maxDamage);
+	file->WriteLE<uint8_t>(static_cast<uint8_t>(std::min<uint16_t>(monster.hit2, std::numeric_limits<uint8_t>::max()))); // For backwards compatibility
+	file->WriteLE<uint8_t>(monster.minDamage2);
+	file->WriteLE<uint8_t>(monster.maxDamage2);
+	file->WriteLE<uint8_t>(monster.armorClass);
 	file->Skip(1); // Alignment
-	file->WriteLE<uint16_t>(monster.mMagicRes);
+	file->WriteLE<uint16_t>(monster.magicResistance);
 	file->Skip(2); // Alignment
 
-	file->WriteLE<int32_t>(monster.mtalkmsg == TEXT_NONE ? 0 : monster.mtalkmsg); // Replicate original bad mapping of none for monsters
+	file->WriteLE<int32_t>(monster.talkMsg == TEXT_NONE ? 0 : monster.talkMsg); // Replicate original bad mapping of none for monsters
 	file->WriteLE<uint8_t>(monster.leader);
 	file->WriteLE<uint8_t>(static_cast<std::uint8_t>(monster.leaderRelation));
-	file->WriteLE<uint8_t>(monster.packsize);
+	file->WriteLE<uint8_t>(monster.packSize);
 	// vanilla compatibility
-	if (monster.mlid == NO_LIGHT)
+	if (monster.lightId == NO_LIGHT)
 		file->WriteLE<int8_t>(0);
 	else
-		file->WriteLE<int8_t>(monster.mlid);
+		file->WriteLE<int8_t>(monster.lightId);
 
 	// Omit pointer mName;
-	// Omit pointer MType;
-	// Omit pointer MData;
 }
 
 void SaveMissile(SaveHelper *file, const Missile &missile)
@@ -1482,7 +1490,7 @@ void SaveObject(SaveHelper &file, const Object &object)
 	file.WriteLE<int32_t>(object.position.x);
 	file.WriteLE<int32_t>(object.position.y);
 	file.WriteLE<uint32_t>(object._oLight ? 1 : 0);
-	file.WriteLE<uint32_t>(object._oAnimFlag);
+	file.WriteLE<uint32_t>(object._oAnimFlag ? 1 : 0);
 	file.Skip(4); // Skip pointer _oAnimData
 	file.WriteLE<int32_t>(object._oAnimDelay);
 	file.WriteLE<int32_t>(object._oAnimCnt);
@@ -1929,8 +1937,8 @@ void LoadHeroItems(Player &player)
 	gbIsHellfireSaveGame = file.NextBool8();
 
 	LoadMatchingItems(file, NUM_INVLOC, player.InvBody);
-	LoadMatchingItems(file, NUM_INV_GRID_ELEM, player.InvList);
-	LoadMatchingItems(file, MAXBELTITEMS, player.SpdList);
+	LoadMatchingItems(file, InventoryGridCells, player.InvList);
+	LoadMatchingItems(file, MaxBeltItems, player.SpdList);
 
 	gbIsHellfireSaveGame = gbIsHellfire;
 }
@@ -1978,7 +1986,7 @@ void LoadStash()
 
 void RemoveEmptyInventory(Player &player)
 {
-	for (int i = NUM_INV_GRID_ELEM; i > 0; i--) {
+	for (int i = InventoryGridCells; i > 0; i--) {
 		int8_t idx = player.InvGrid[i - 1];
 		if (idx > 0 && player.InvList[idx - 1].isEmpty()) {
 			player.RemoveInvItem(idx - 1);
@@ -2053,7 +2061,7 @@ void LoadGame(bool firstflag)
 
 	LoadGameLevel(firstflag, ENTRY_LOAD);
 	SyncInitPlr(MyPlayerId);
-	SyncPlrAnim(MyPlayerId);
+	SyncPlrAnim(myPlayer);
 
 	ViewPosition = { viewX, viewY };
 	ActiveMonsterCount = tmpNummonsters;
@@ -2189,7 +2197,7 @@ void LoadGame(bool firstflag)
 
 void SaveHeroItems(MpqWriter &saveWriter, Player &player)
 {
-	size_t itemCount = NUM_INVLOC + NUM_INV_GRID_ELEM + MAXBELTITEMS;
+	size_t itemCount = static_cast<size_t>(NUM_INVLOC) + InventoryGridCells + MaxBeltItems;
 	SaveHelper file(saveWriter, "heroitems", itemCount * (gbIsHellfire ? HellfireItemSaveSize : DiabloItemSaveSize) + sizeof(uint8_t));
 
 	file.WriteLE<uint8_t>(gbIsHellfire ? 1 : 0);

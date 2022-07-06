@@ -468,7 +468,7 @@ int GetGoldCursor(int value);
  * @param h The item to update
  */
 void SetPlrHandGoldCurs(Item &gold);
-void CreatePlrItems(int playerId);
+void CreatePlrItems(Player &player);
 bool ItemSpaceOk(Point position);
 int AllocateItem();
 Point GetSuperItemLoc(Point position);
@@ -538,7 +538,7 @@ std::string DebugSpawnUniqueItem(std::string itemName);
 
 extern int MaxGold;
 
-extern BYTE ItemCAnimTbl[];
+extern int8_t ItemCAnimTbl[];
 extern _sfx_id ItemInvSnds[];
 
 } // namespace devilution

@@ -14,6 +14,7 @@
 #include "dthread.h"
 #include "engine/point.hpp"
 #include "engine/random.hpp"
+#include "engine/world_tile.hpp"
 #include "menu.h"
 #include "nthread.h"
 #include "options.h"
@@ -138,7 +139,7 @@ void NetReceivePlayerData(TPkt *pkt)
 bool IsNetPlayerValid(const Player &player)
 {
 	return player._pLevel >= 1
-	    && player._pLevel <= MAXCHARLEVEL
+	    && player._pLevel <= MaxCharacterLevel
 	    && static_cast<uint8_t>(player._pClass) < enum_size<HeroClass>::value
 	    && player.plrlevel < NUMLEVELS
 	    && player.pDifficulty <= DIFF_LAST
@@ -191,8 +192,8 @@ void MonsterSeeds()
 {
 	sgdwGameLoops++;
 	const uint32_t seed = (sgdwGameLoops >> 8) | (sgdwGameLoops << 24); // _rotr(sgdwGameLoops, 8)
-	for (int i = 0; i < MAXMONSTERS; i++)
-		Monsters[i]._mAISeed = seed + i;
+	for (int i = 0; i < MaxMonsters; i++)
+		Monsters[i].aiSeed = seed + i;
 }
 
 void HandleTurnUpperBit(int pnum)
@@ -206,7 +207,7 @@ void HandleTurnUpperBit(int pnum)
 
 	if (MyPlayerId == i) {
 		sgbSendDeltaTbl[pnum] = true;
-	} else if (MyPlayerId == pnum) {
+	} else if (pnum == MyPlayerId) {
 		gbDeltaSender = i;
 	}
 }
@@ -240,7 +241,7 @@ void PlayerLeftMsg(int pnum, bool left)
 	RemovePortalMissile(pnum);
 	DeactivatePortal(pnum);
 	delta_close_portal(pnum);
-	RemovePlrMissiles(pnum);
+	RemovePlrMissiles(player);
 	if (left) {
 		string_view pszFmt = _("Player '{:s}' just left the game");
 		switch (sgdwPlayerLeftReasonTbl[pnum]) {
@@ -349,16 +350,13 @@ void SetupLocalPositions()
 	leveltype = DTYPE_TOWN;
 	setlevel = false;
 
-	int x = 75;
-	int y = 68;
-
-	x += plrxoff[MyPlayerId];
-	y += plryoff[MyPlayerId];
+	const auto x = static_cast<WorldTileCoord>(75 + plrxoff[MyPlayerId]);
+	const auto y = static_cast<WorldTileCoord>(68 + plryoff[MyPlayerId]);
 
 	Player &myPlayer = *MyPlayer;
 
-	myPlayer.position.tile = { x, y };
-	myPlayer.position.future = { x, y };
+	myPlayer.position.tile = WorldTilePosition { x, y };
+	myPlayer.position.future = WorldTilePosition { x, y };
 	myPlayer.setLevel(currlevel);
 	myPlayer._pLvlChanging = true;
 	myPlayer.pLvlLoad = 0;
@@ -374,7 +372,7 @@ void HandleEvents(_SNETEVENT *pEvt)
 	case EVENT_TYPE_PLAYER_CREATE_GAME: {
 		auto *gameData = (GameData *)pEvt->data;
 		if (gameData->size != sizeof(GameData))
-			app_fatal("Invalid size of game data: %i", gameData->size);
+			app_fatal(fmt::format("Invalid size of game data: {}", gameData->size));
 		sgGameInitInfo = *gameData;
 		sgbPlayerTurnBitTbl[pEvt->playerid] = true;
 		break;
@@ -407,7 +405,7 @@ void EventHandler(bool add)
 	for (auto eventType : EventTypes) {
 		if (add) {
 			if (!SNetRegisterEventHandler(eventType, HandleEvents)) {
-				app_fatal("SNetRegisterEventHandler:\n%s", SDL_GetError());
+				app_fatal(fmt::format("SNetRegisterEventHandler:\n{}", SDL_GetError()));
 			}
 		} else {
 			SNetUnregisterEventHandler(eventType);
@@ -423,7 +421,7 @@ bool InitSingle(GameData *gameData)
 
 	int unused = 0;
 	if (!SNetCreateGame("local", "local", (char *)&sgGameInitInfo, sizeof(sgGameInitInfo), &unused)) {
-		app_fatal("SNetCreateGame1:\n%s", SDL_GetError());
+		app_fatal(fmt::format("SNetCreateGame1:\n{}", SDL_GetError()));
 	}
 
 	MyPlayerId = 0;
@@ -531,8 +529,8 @@ void multi_msg_countdown()
 {
 	for (int i = 0; i < MAX_PLRS; i++) {
 		if ((player_state[i] & PS_TURN_ARRIVED) != 0) {
-			if (gdwMsgLenTbl[i] == 4)
-				ParseTurn(i, *(DWORD *)glpMsgTbl[i]);
+			if (gdwMsgLenTbl[i] == sizeof(int32_t))
+				ParseTurn(i, *(int32_t *)glpMsgTbl[i]);
 		}
 	}
 }
@@ -785,7 +783,7 @@ void recv_plrinfo(int pnum, const TCmdPlrInfoHdr &header, bool recv)
 {
 	static PlayerPack PackedPlayerBuffer[MAX_PLRS];
 
-	if (MyPlayerId == pnum) {
+	if (pnum == MyPlayerId) {
 		return;
 	}
 	assert(pnum >= 0 && pnum < MAX_PLRS);
@@ -847,7 +845,7 @@ void recv_plrinfo(int pnum, const TCmdPlrInfoHdr &header, bool recv)
 	player._pgfxnum &= ~0xF;
 	player._pmode = PM_DEATH;
 	NewPlrAnim(player, player_graphic::Death, Direction::South, player._pDFrames, 1);
-	player.AnimInfo.CurrentFrame = player.AnimInfo.NumberOfFrames - 2;
+	player.AnimInfo.currentFrame = player.AnimInfo.numberOfFrames - 2;
 	dFlags[player.position.tile.x][player.position.tile.y] |= DungeonFlag::DeadPlayer;
 }
 

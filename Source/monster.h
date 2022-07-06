@@ -15,18 +15,18 @@
 #include "engine/cel_sprite.hpp"
 #include "engine/point.hpp"
 #include "engine/sound.h"
+#include "engine/world_tile.hpp"
 #include "miniwin/miniwin.h"
 #include "monstdat.h"
 #include "spelldat.h"
 #include "textdat.h"
-#include "utils/stdcompat/optional.hpp"
 
 namespace devilution {
 
 struct Missile;
 
-#define MAXMONSTERS 200
-#define MAX_LVLMTYPES 24
+constexpr int MaxMonsters = 200;
+constexpr int MaxLvlMTypes = 24;
 
 enum monster_flag : uint16_t {
 	// clang-format off
@@ -46,7 +46,7 @@ enum monster_flag : uint16_t {
 	// clang-format on
 };
 
-/** this enum contains indexes from UniqueMonstersData array for special unique monsters (usually quest related) */
+/** Indexes from UniqueMonstersData array for special unique monsters (usually quest related) */
 enum : uint8_t {
 	UMT_GARBUD,
 	UMT_SKELKING,
@@ -63,7 +63,7 @@ enum : uint8_t {
 	UMT_NAKRUL,
 };
 
-enum class MonsterMode {
+enum class MonsterMode : uint8_t {
 	Stand,
 	/** Movement towards N, NW, or NE */
 	MoveNorthwards,
@@ -87,7 +87,7 @@ enum class MonsterMode {
 	Talk,
 };
 
-enum class MonsterGraphic {
+enum class MonsterGraphic : uint8_t {
 	Stand,
 	Walk,
 	Attack,
@@ -117,187 +117,222 @@ enum placeflag : uint8_t {
 
 /**
  * @brief Defines the relation of the monster to a monster pack.
- *        If value is differnt from Individual Monster.leader must also be set
+ *        If value is different from Individual Monster, the leader must also be set
  */
 enum class LeaderRelation : uint8_t {
 	None,
 	/**
-	 * @brief Minion that sticks with the leader
+	 * @brief Minion that sticks to the leader
 	 */
 	Leashed,
 	/**
-	 * @brief Minion that was separated from leader and acts individual until it reaches the leader again
+	 * @brief Minion that was separated from the leader and acts individually until it reaches the leader again
 	 */
 	Separated,
 };
 
 struct AnimStruct {
-	[[nodiscard]] std::optional<CelSprite> GetCelSpritesForDirection(Direction direction) const
+	[[nodiscard]] OptionalCelSprite getCelSpritesForDirection(Direction direction) const
 	{
-		const byte *spriteData = CelSpritesForDirections[static_cast<size_t>(direction)];
+		const byte *spriteData = celSpritesForDirections[static_cast<size_t>(direction)];
 		if (spriteData == nullptr)
 			return std::nullopt;
-		return CelSprite(spriteData, Width);
+		return CelSprite(spriteData, width);
 	}
 
-	std::array<byte *, 8> CelSpritesForDirections;
-	uint16_t Width;
-	int Frames;
-	int Rate;
+	std::array<byte *, 8> celSpritesForDirections;
+	uint16_t width;
+	int8_t frames;
+	int8_t rate;
 };
 
 struct CMonster {
-	_monster_id mtype;
+	_monster_id type;
 	/** placeflag enum as a flags*/
-	uint8_t mPlaceFlags;
+	uint8_t placeFlags;
 	std::unique_ptr<byte[]> animData;
-	AnimStruct Anims[6];
+	AnimStruct anims[6];
 	/**
 	 * @brief Returns AnimStruct for specified graphic
 	 */
-	const AnimStruct &GetAnimData(MonsterGraphic graphic) const
+	const AnimStruct &getAnimData(MonsterGraphic graphic) const
 	{
-		return Anims[static_cast<int>(graphic)];
+		return anims[static_cast<int>(graphic)];
 	}
-	std::unique_ptr<TSnd> Snds[4][2];
-	int8_t mdeadval;
-	const MonsterData *MData;
+	std::unique_ptr<TSnd> sounds[4][2];
+	int8_t corpseId;
+	const MonsterData *data;
 };
 
+extern CMonster LevelMonsterTypes[MaxLvlMTypes];
+
 struct Monster { // note: missing field _mAFNum
-	int _mMTidx;
-	MonsterMode _mmode;
-	monster_goal _mgoal;
-	int _mgoalvar1;
-	int _mgoalvar2;
-	int _mgoalvar3;
-	uint8_t _pathcount;
-	ActorPosition position;
-	/** Direction faced by monster (direction enum) */
-	Direction _mdir;
-	/** The current target of the mosnter. An index in to either the plr or monster array based on the _meflag value. */
-	int _menemy;
-	/** Usually correspond's to the enemy's future position */
-	Point enemyPosition;
+	const char *name;
+	std::unique_ptr<uint8_t[]> uniqueMonsterTRN;
 	/**
-	 * @brief Contains Information for current Animation
+	 * @brief Contains information for current animation
 	 */
-	AnimationInfo AnimInfo;
-	bool _mDelFlag;
-	int _mVar1;
-	int _mVar2;
-	int _mVar3;
-	int _mmaxhp;
-	int _mhitpoints;
-	_mai_id _mAi;
-	uint8_t _mint;
-	uint32_t _mFlags;
-	uint8_t _msquelch;
+	AnimationInfo animInfo;
+	/** Specifies current goal of the monster */
+	monster_goal goal;
+	/** Specifies monster's behaviour regarding moving and changing goals. */
+	int goalVar1;
+	/**
+	 * @brief Specifies turning direction for @p RoundWalk in most cases.
+	 * Used in custom way by @p FallenAi, @p SnakeAi, @p M_FallenFear and @p FallenAi.
+	 */
+	int goalVar2;
+	/**
+	 * @brief Controls monster's behaviour regarding special actions.
+	 * Used only by @p ScavengerAi and @p MegaAi.
+	 */
+	int goalVar3;
+	int var1;
+	int var2;
+	int var3;
+	int maxHitPoints;
+	int hitPoints;
+	uint32_t flags;
 	/** Seed used to determine item drops on death */
-	uint32_t _mRndSeed;
+	uint32_t rndItemSeed;
 	/** Seed used to determine AI behaviour/sync sounds in multiplayer games? */
-	uint32_t _mAISeed;
-	uint8_t _uniqtype;
-	uint8_t _uniqtrans;
-	int8_t _udeadval;
-	int8_t mWhoHit;
-	int8_t mLevel;
-	uint16_t mExp;
-	uint16_t mHit;
-	uint8_t mMinDamage;
-	uint8_t mMaxDamage;
-	uint16_t mHit2;
-	uint8_t mMinDamage2;
-	uint8_t mMaxDamage2;
-	uint8_t mArmorClass;
-	uint16_t mMagicRes;
-	_speech_id mtalkmsg;
+	uint32_t aiSeed;
+	uint16_t exp;
+	uint16_t hit;
+	uint16_t hit2;
+	uint16_t magicResistance;
+	_speech_id talkMsg;
+	ActorPosition position;
+
+	/** Usually corresponds to the enemy's future position */
+	WorldTilePosition enemyPosition;
+	uint8_t levelType;
+	MonsterMode mode;
+	uint8_t pathCount;
+	/** Direction faced by monster (direction enum) */
+	Direction direction;
+	/** The current target of the monster. An index in to either the player or monster array based on the _meflag value. */
+	uint8_t enemy;
+	bool isInvalid;
+	_mai_id ai;
+	/**
+	 * @brief Specifies monster's behaviour across various actions.
+	 * Generally, when monster thinks it decides what to do based on this value, among other things.
+	 * Higher values should result in more aggressive behaviour (e.g. some monsters use this to calculate the @p AiDelay).
+	 */
+	uint8_t intelligence;
+	/** Stores information for how many ticks the monster will remain active */
+	uint8_t activeForTicks;
+	uint8_t uniqType;
+	uint8_t uniqTrans;
+	int8_t corpseId;
+	int8_t whoHit;
+	int8_t level;
+	uint8_t minDamage;
+	uint8_t maxDamage;
+	uint8_t minDamage2;
+	uint8_t maxDamage2;
+	uint8_t armorClass;
 	uint8_t leader;
 	LeaderRelation leaderRelation;
-	uint8_t packsize;
-	int8_t mlid; // BUGFIX -1 is used when not emitting light this should be signed (fixed)
-	const char *mName;
-	CMonster *MType;
-	const MonsterData *MData;
-	std::unique_ptr<uint8_t[]> uniqueTRN;
+	uint8_t packSize;
+	int8_t lightId;
 
 	/**
-	 * @brief Sets the current cell sprite to match the desired direction and animation sequence
+	 * @brief Sets the current cell sprite to match the desired desiredDirection and animation sequence
 	 * @param graphic Animation sequence of interest
-	 * @param direction Desired direction the monster should be visually facing
+	 * @param desiredDirection Desired desiredDirection the monster should be visually facing
 	 */
-	void ChangeAnimationData(MonsterGraphic graphic, Direction direction)
+	void changeAnimationData(MonsterGraphic graphic, Direction desiredDirection)
 	{
-		auto &animationData = this->MType->GetAnimData(graphic);
+		auto &animationData = type().getAnimData(graphic);
 
-		// Passing the Frames and Rate properties here is only relevant when initialising a monster, but doesn't cause any harm when switching animations.
-		this->AnimInfo.ChangeAnimationData(animationData.GetCelSpritesForDirection(direction), animationData.Frames, animationData.Rate);
+		// Passing the Frames and rate properties here is only relevant when initialising a monster, but doesn't cause any harm when switching animations.
+		this->animInfo.changeAnimationData(animationData.getCelSpritesForDirection(desiredDirection), animationData.frames, animationData.rate);
 	}
 
 	/**
 	 * @brief Sets the current cell sprite to match the desired animation sequence using the direction the monster is currently facing
 	 * @param graphic Animation sequence of interest
 	 */
-	void ChangeAnimationData(MonsterGraphic graphic)
+	void changeAnimationData(MonsterGraphic graphic)
 	{
-		this->ChangeAnimationData(graphic, this->_mdir);
+		this->changeAnimationData(graphic, this->direction);
 	}
 
 	/**
-	 * @brief Check thats the correct stand Animation is loaded. This is needed if direction is changed (monster stands and looks to player).
-	 * @param mdir direction of the monster
+	 * @brief Check if the correct stand Animation is loaded. This is needed if direction is changed (monster stands and looks at the player).
+	 * @param dir direction of the monster
 	 */
-	void CheckStandAnimationIsLoaded(Direction mdir);
+	void checkStandAnimationIsLoaded(Direction dir);
 
 	/**
-	 * @brief Sets _mmode to MonsterMode::Petrified
+	 * @brief Sets mode to MonsterMode::Petrified
 	 */
-	void Petrify();
+	void petrify();
+
+	const CMonster &type() const
+	{
+		return LevelMonsterTypes[levelType];
+	}
+
+	const MonsterData &data() const
+	{
+		return *type().data;
+	}
+
+	/**
+	 * @brief Returns the network identifier for this monster
+	 *
+	 * This is currently the index into the Monsters array, but may change in the future.
+	 */
+	[[nodiscard]] size_t getId() const;
 
 	/**
 	 * @brief Is the monster currently walking?
 	 */
-	bool IsWalking() const;
-	bool IsImmune(missile_id mitype) const;
-	bool IsResistant(missile_id mitype) const;
-	bool IsPossibleToHit() const;
-	bool TryLiftGargoyle();
+	bool isWalking() const;
+	bool isImmune(missile_id mitype) const;
+	bool isResistant(missile_id mitype) const;
+	bool isPossibleToHit() const;
+	bool tryLiftGargoyle();
 };
 
-extern CMonster LevelMonsterTypes[MAX_LVLMTYPES];
 extern int LevelMonsterTypeCount;
-extern Monster Monsters[MAXMONSTERS];
-extern int ActiveMonsters[MAXMONSTERS];
+extern Monster Monsters[MaxMonsters];
+extern int ActiveMonsters[MaxMonsters];
 extern int ActiveMonsterCount;
-extern int MonsterKillCounts[MAXMONSTERS];
+extern int MonsterKillCounts[MaxMonsters];
 extern bool sgbSaveSoundOn;
 
 void PrepareUniqueMonst(Monster &monster, int uniqindex, int miniontype, int bosspacksize, const UniqueMonsterData &uniqueMonsterData);
 void InitLevelMonsters();
 void GetLevelMTypes();
-void InitMonsterGFX(int monst);
-void monster_some_crypt();
+void InitMonsterGFX(int monsterTypeIndex);
+void WeakenNaKrul();
 void InitGolems();
 void InitMonsters();
 void SetMapMonsters(const uint16_t *dunData, Point startPosition);
-int AddMonster(Point position, Direction dir, int mtype, bool inMap);
+Monster *AddMonster(Point position, Direction dir, int mtype, bool inMap);
 void AddDoppelganger(Monster &monster);
 bool M_Talker(const Monster &monster);
 void M_StartStand(Monster &monster, Direction md);
-void M_ClearSquares(int i);
-void M_GetKnockback(int i);
-void M_StartHit(int i, int pnum, int dam);
-void M_StartKill(int i, int pnum);
-void M_SyncStartKill(int i, Point position, int pnum);
-void M_UpdateLeader(int i);
+void M_ClearSquares(const Monster &monster);
+void M_GetKnockback(Monster &monster);
+void M_StartHit(Monster &monster, int dam);
+void M_StartHit(Monster &monster, int pnum, int dam);
+void StartMonsterDeath(Monster &monster, int pnum, bool sendmsg);
+void M_StartKill(int monsterId, int pnum);
+void M_SyncStartKill(int monsterId, Point position, int pnum);
+void M_UpdateLeader(int monsterId);
 void DoEnding();
 void PrepDoEnding();
-void M_WalkDir(int i, Direction md);
-void GolumAi(int i);
+void M_WalkDir(Monster &monster, Direction md);
+void GolumAi(int monsterId);
 void DeleteMonsterList();
 void ProcessMonsters();
 void FreeMonsters();
-bool DirOK(int i, Direction mdir);
+bool DirOK(int monsterId, Direction mdir);
 bool PosOkMissile(Point position);
 bool LineClearMissile(Point startPoint, Point endPoint);
 bool LineClear(const std::function<bool(Point)> &clear, Point startPoint, Point endPoint);
@@ -308,16 +343,18 @@ void PrintUniqueHistory();
 void PlayEffect(Monster &monster, int mode);
 void MissToMonst(Missile &missile, Point position);
 
+Monster *MonsterAtPosition(Point position);
+
 /**
  * @brief Check that the given tile is available to the monster
  */
 bool IsTileAvailable(const Monster &monster, Point position);
 bool IsSkel(_monster_id mt);
 bool IsGoat(_monster_id mt);
-bool SpawnSkeleton(int ii, Point position);
-int PreSpawnSkeleton();
+bool SpawnSkeleton(Monster *monster, Point position);
+Monster *PreSpawnSkeleton();
 void TalktoMonster(Monster &monster);
-void SpawnGolem(int i, Point position, Missile &missile);
+void SpawnGolem(int id, Point position, Missile &missile);
 bool CanTalkToMonst(const Monster &monster);
 int encode_enemy(Monster &monster);
 void decode_enemy(Monster &monster, int enemyId);

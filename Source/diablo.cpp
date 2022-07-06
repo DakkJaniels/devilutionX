@@ -991,8 +991,8 @@ void DiabloInitScreen()
 
 void SetApplicationVersions()
 {
-	snprintf(gszProductName, sizeof(gszProductName) / sizeof(char), "%s v%s", PROJECT_NAME, PROJECT_VERSION);
-	CopyUtf8(gszVersionNumber, fmt::format(fmt::runtime(_("version {:s}")), PROJECT_VERSION), sizeof(gszVersionNumber) / sizeof(char));
+	*fmt::format_to_n(gszProductName, sizeof(gszProductName) - 1, "{} v{}", PROJECT_NAME, PROJECT_VERSION).out = '\0';
+	CopyUtf8(gszVersionNumber, fmt::format(fmt::runtime(_("version {:s}")), PROJECT_VERSION), sizeof(gszVersionNumber));
 }
 
 void DiabloInit()
@@ -1219,8 +1219,8 @@ void UnstuckChargers()
 	}
 	for (int i = 0; i < ActiveMonsterCount; i++) {
 		auto &monster = Monsters[ActiveMonsters[i]];
-		if (monster._mmode == MonsterMode::Charge)
-			monster._mmode = MonsterMode::Stand;
+		if (monster.mode == MonsterMode::Charge)
+			monster.mode = MonsterMode::Stand;
 	}
 }
 
@@ -1228,15 +1228,21 @@ void UpdateMonsterLights()
 {
 	for (int i = 0; i < ActiveMonsterCount; i++) {
 		auto &monster = Monsters[ActiveMonsters[i]];
-		if (monster.mlid != NO_LIGHT) {
-			if (monster.mlid == MyPlayer->_plid) { // Fix old saves where some monsters had 0 instead of NO_LIGHT
-				monster.mlid = NO_LIGHT;
+
+		if ((monster.flags & MFLAG_BERSERK) != 0) {
+			int lightRadius = leveltype == DTYPE_NEST ? 9 : 3;
+			monster.lightId = AddLight(monster.position.tile, lightRadius);
+		}
+
+		if (monster.lightId != NO_LIGHT) {
+			if (monster.lightId == MyPlayer->_plid) { // Fix old saves where some monsters had 0 instead of NO_LIGHT
+				monster.lightId = NO_LIGHT;
 				continue;
 			}
 
-			Light &light = Lights[monster.mlid];
+			Light &light = Lights[monster.lightId];
 			if (monster.position.tile != light.position.tile) {
-				ChangeLightXY(monster.mlid, monster.position.tile);
+				ChangeLightXY(monster.lightId, monster.position.tile);
 			}
 		}
 	}
@@ -1891,11 +1897,11 @@ bool TryIconCurs()
 
 	if (pcurs == CURSOR_TELEPORT) {
 		if (pcursmonst != -1)
-			NetSendCmdParam3(true, CMD_TSPELLID, pcursmonst, myPlayer._pTSpell, GetSpellLevel(MyPlayerId, myPlayer._pTSpell));
+			NetSendCmdParam3(true, CMD_TSPELLID, pcursmonst, myPlayer._pTSpell, myPlayer.GetSpellLevel(myPlayer._pTSpell));
 		else if (pcursplr != -1)
-			NetSendCmdParam3(true, CMD_TSPELLPID, pcursplr, myPlayer._pTSpell, GetSpellLevel(MyPlayerId, myPlayer._pTSpell));
+			NetSendCmdParam3(true, CMD_TSPELLPID, pcursplr, myPlayer._pTSpell, myPlayer.GetSpellLevel(myPlayer._pTSpell));
 		else
-			NetSendCmdLocParam2(true, CMD_TSPELLXY, cursPosition, myPlayer._pTSpell, GetSpellLevel(MyPlayerId, myPlayer._pTSpell));
+			NetSendCmdLocParam2(true, CMD_TSPELLXY, cursPosition, myPlayer._pTSpell, myPlayer.GetSpellLevel(myPlayer._pTSpell));
 		NewCursor(CURSOR_HAND);
 		return true;
 	}
@@ -2328,8 +2334,10 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		music_mute();
 	}
 
-	while (!IncProgress())
-		;
+	if (firstflag) {
+		while (!IncProgress())
+			;
+	}
 
 	if (!gbIsSpawn && setlevel && setlvlnum == SL_SKELKING && Quests[Q_SKELKING]._qactive == QUEST_ACTIVE)
 		PlaySFX(USFX_SKING1);
