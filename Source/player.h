@@ -436,6 +436,7 @@ struct Player {
 	void Say(HeroSpeech speechId) const;
 	/**
 	 * @brief Says a speech line after a given delay.
+	 * @param speechId The speech ID to say.
 	 * @param delay Multiple of 50ms wait before starting the speech
 	 */
 	void Say(HeroSpeech speechId, int delay) const;
@@ -754,6 +755,7 @@ void ResetPlayerGFX(Player &player);
 
 /**
  * @brief Sets the new Player Animation with all relevant information for rendering
+ * @param player The player to set the animation for
  * @param graphic What player animation should be displayed
  * @param dir Direction of the animation
  * @param numberOfFrames Number of Frames in Animation

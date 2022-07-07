@@ -2462,6 +2462,7 @@ void SetPlrAnims(Player &player)
 }
 
 /**
+ * @param player The player reference.
  * @param c The hero class.
  */
 void CreatePlayer(Player &player, HeroClass c)
@@ -3407,6 +3408,7 @@ void ClrPlrPath(Player &player)
  *
  * This requires an ID instead of a Player& to compare with the dPlayer lookup table values.
  *
+ * @param player The player to check.
  * @param position Dungeon tile coordinates.
  * @return False if something (other than the player themselves) is blocking the tile.
  */
