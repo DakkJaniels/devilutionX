@@ -124,6 +124,8 @@ cmake_dependent_option(DEVILUTIONX_DISABLE_RTTI "Disable RTTI" ON "NONET" OFF)
 cmake_dependent_option(DEVILUTIONX_DISABLE_EXCEPTIONS "Disable exceptions" ON "NONET" OFF)
 RELEASE_OPTION(DEVILUTIONX_STATIC_CXX_STDLIB "Link C++ standard library statically (if available)")
 
+include(MoldLinker)
+
 # Memory / performance trade-off options
 option(DISABLE_STREAMING_MUSIC "Disable streaming music (to work around broken platform implementations)" OFF)
 mark_as_advanced(DISABLE_STREAMING_MUSIC)
@@ -188,7 +190,8 @@ endif()
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
-  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+  set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
 endif()
 
 if(DEVILUTIONX_DISABLE_RTTI)
@@ -465,6 +468,21 @@ endif()
 
 if(UWP_LIB)
   target_compile_definitions(libdevilutionx PRIVATE __UWP__=1)
+endif()
+
+if(NXDK)
+  target_link_libraries(${BIN_TARGET} PRIVATE "${NXDK_DIR}/lib/libnxdk_automount_d.lib")
+  target_link_options(${BIN_TARGET} PRIVATE "-include:_automount_d_drive")
+
+  set(_nxdk_pkg_dir "${CMAKE_BINARY_DIR}/pkg")
+  set(_xbe_path "${_nxdk_pkg_dir}/default.xbe")
+  add_custom_command(
+    OUTPUT "${_xbe_path}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nxdk_pkg_dir}"
+    COMMAND "${NXDK_DIR}/tools/cxbe/cxbe" "-OUT:${_xbe_path}" -TITLE:DevilutionX "-Logo:${PROJECT_SOURCE_DIR}/Packaging/xbox_nxdk/xbe_logo.pgm" "${CMAKE_BINARY_DIR}/${BIN_TARGET}.exe"
+    DEPENDS "${BIN_TARGET}"
+  )
+  add_custom_target(nxdk_xbe DEPENDS "${_xbe_path}")
 endif()
 
 if(CPACK AND (APPLE OR BUILD_ASSETS_MPQ OR SRC_DIST))

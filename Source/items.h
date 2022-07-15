@@ -452,7 +452,7 @@ extern bool ShowUniqueItemInfoBox;
 extern CornerStoneStruct CornerStone;
 extern bool UniqueItemFlags[128];
 
-BYTE GetOutlineColor(const Item &item, bool checkReq);
+uint8_t GetOutlineColor(const Item &item, bool checkReq);
 bool IsItemAvailable(int i);
 bool IsUniqueAvailable(int i);
 void InitItemGFX();
@@ -507,7 +507,7 @@ void UseItem(int p, item_misc_id Mid, spell_id spl);
 bool UseItemOpensHive(const Item &item, Point position);
 bool UseItemOpensCrypt(const Item &item, Point position);
 void SpawnSmith(int lvl);
-void SpawnPremium(int pnum);
+void SpawnPremium(Player &player);
 void SpawnWitch(int lvl);
 void SpawnBoy(int lvl);
 void SpawnHealer(int lvl);

@@ -5,14 +5,14 @@
  */
 #include "effects.h"
 
-#include <fmt/compile.h>
-
 #include "engine/random.hpp"
 #include "engine/sound.h"
 #include "engine/sound_defs.hpp"
 #include "init.h"
+#include "miniwin/miniwin.h"
 #include "player.h"
 #include "utils/stdcompat/algorithm.hpp"
+#include "utils/str_cat.hpp"
 
 namespace devilution {
 
@@ -1162,7 +1162,7 @@ _sfx_id RndSFX(_sfx_id psfx)
 	return static_cast<_sfx_id>(psfx + GenerateRnd(nRand));
 }
 
-void PrivSoundInit(BYTE bLoadMask)
+void PrivSoundInit(uint8_t bLoadMask)
 {
 	if (!gbSndInited) {
 		return;
@@ -1211,18 +1211,20 @@ void stream_stop()
 	}
 }
 
-void InitMonsterSND(int monst)
+void InitMonsterSND(size_t monst)
 {
 	if (!gbSndInited) {
 		return;
 	}
 
 	const int mtype = LevelMonsterTypes[monst].type;
+	const MonsterData &data = MonstersData[mtype];
 	for (int i = 0; i < 4; i++) {
-		if (MonstSndChar[i] != 's' || MonstersData[mtype].snd_special) {
+		if (MonstSndChar[i] != 's' || data.hasSpecialSound) {
 			for (int j = 0; j < 2; j++) {
 				char path[MAX_PATH];
-				*fmt::format_to(path, FMT_COMPILE("{}{}{}.WAV"), MonstersData[mtype].sndfile, MonstSndChar[i], j + 1) = '\0';
+				const char *sndfile = data.soundSuffix != nullptr ? data.soundSuffix : data.assetsSuffix;
+				*BufCopy(path, "Monsters\\", sndfile, string_view(&MonstSndChar[i], 1), j + 1, ".WAV") = '\0';
 				LevelMonsterTypes[monst].sounds[i][j] = sound_file_load(path);
 			}
 		}
@@ -1232,9 +1234,9 @@ void InitMonsterSND(int monst)
 void FreeMonsterSnd()
 {
 #ifdef _DEBUG
-	for (int i = 0; i < MaxLvlMTypes; i++) {
+	for (size_t i = 0; i < MaxLvlMTypes; i++) {
 #else
-	for (int i = 0; i < LevelMonsterTypeCount; i++) {
+	for (size_t i = 0; i < LevelMonsterTypeCount; i++) {
 #endif
 		for (auto &variants : LevelMonsterTypes[i].sounds) {
 			for (auto &snd : variants) {

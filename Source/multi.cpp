@@ -16,6 +16,7 @@
 #include "engine/random.hpp"
 #include "engine/world_tile.hpp"
 #include "menu.h"
+#include "miniwin/miniwin.h"
 #include "nthread.h"
 #include "options.h"
 #include "pfile.h"
@@ -28,6 +29,7 @@
 #include "utils/language.h"
 #include "utils/stdcompat/cstddef.hpp"
 #include "utils/stdcompat/string_view.hpp"
+#include "utils/str_cat.hpp"
 
 namespace devilution {
 
@@ -38,7 +40,7 @@ uint16_t sgwPackPlrOffsetTbl[MAX_PLRS];
 bool sgbPlayerTurnBitTbl[MAX_PLRS];
 bool sgbPlayerLeftGameTbl[MAX_PLRS];
 bool gbShouldValidatePackage;
-BYTE gbActivePlayers;
+uint8_t gbActivePlayers;
 bool gbGameDestroyed;
 bool sgbSendDeltaTbl[MAX_PLRS];
 GameData sgGameInitInfo;
@@ -55,7 +57,7 @@ bool gbIsMultiplayer;
 bool sgbTimeout;
 char szPlayerName[128];
 bool PublicGame;
-BYTE gbDeltaSender;
+uint8_t gbDeltaSender;
 bool sgbNetInited;
 uint32_t player_state[MAX_PLRS];
 Uint32 playerInfoTimers[MAX_PLRS];
@@ -150,13 +152,14 @@ bool IsNetPlayerValid(const Player &player)
 void CheckPlayerInfoTimeouts()
 {
 	for (int i = 0; i < MAX_PLRS; i++) {
-		if (i == MyPlayerId) {
+		Player &player = Players[i];
+		if (&player == MyPlayer) {
 			continue;
 		}
 
 		Uint32 &timerStart = playerInfoTimers[i];
 		bool isPlayerConnected = (player_state[i] & PS_CONNECTED) != 0;
-		bool isPlayerValid = isPlayerConnected && IsNetPlayerValid(Players[i]);
+		bool isPlayerValid = isPlayerConnected && IsNetPlayerValid(player);
 		if (isPlayerConnected && !isPlayerValid && timerStart == 0) {
 			timerStart = SDL_GetTicks();
 		}
@@ -192,7 +195,7 @@ void MonsterSeeds()
 {
 	sgdwGameLoops++;
 	const uint32_t seed = (sgdwGameLoops >> 8) | (sgdwGameLoops << 24); // _rotr(sgdwGameLoops, 8)
-	for (int i = 0; i < MaxMonsters; i++)
+	for (size_t i = 0; i < MaxMonsters; i++)
 		Monsters[i].aiSeed = seed + i;
 }
 
@@ -227,17 +230,14 @@ void ParseTurn(int pnum, uint32_t turn)
 
 void PlayerLeftMsg(int pnum, bool left)
 {
-	if (pnum == MyPlayerId) {
-		return;
-	}
-
 	Player &player = Players[pnum];
 
-	if (!player.plractive) {
+	if (&player == MyPlayer)
 		return;
-	}
+	if (!player.plractive)
+		return;
 
-	RemovePlrFromMap(pnum);
+	FixPlrWalkTags(player);
 	RemovePortalMissile(pnum);
 	DeactivatePortal(pnum);
 	delta_close_portal(pnum);
@@ -311,7 +311,7 @@ void BeginTimeout()
 void HandleAllPackets(int pnum, const byte *data, size_t size)
 {
 	for (unsigned offset = 0; offset < size;) {
-		int messageSize = ParseCmd(pnum, reinterpret_cast<const TCmd *>(&data[offset]));
+		size_t messageSize = ParseCmd(pnum, reinterpret_cast<const TCmd *>(&data[offset]));
 		if (messageSize == 0) {
 			break;
 		}
@@ -372,7 +372,7 @@ void HandleEvents(_SNETEVENT *pEvt)
 	case EVENT_TYPE_PLAYER_CREATE_GAME: {
 		auto *gameData = (GameData *)pEvt->data;
 		if (gameData->size != sizeof(GameData))
-			app_fatal(fmt::format("Invalid size of game data: {}", gameData->size));
+			app_fatal(StrCat("Invalid size of game data: ", gameData->size));
 		sgGameInitInfo = *gameData;
 		sgbPlayerTurnBitTbl[pEvt->playerid] = true;
 		break;
@@ -400,16 +400,19 @@ void HandleEvents(_SNETEVENT *pEvt)
 	}
 }
 
-void EventHandler(bool add)
+void RegisterNetEventHandlers()
 {
 	for (auto eventType : EventTypes) {
-		if (add) {
-			if (!SNetRegisterEventHandler(eventType, HandleEvents)) {
-				app_fatal(fmt::format("SNetRegisterEventHandler:\n{}", SDL_GetError()));
-			}
-		} else {
-			SNetUnregisterEventHandler(eventType);
+		if (!SNetRegisterEventHandler(eventType, HandleEvents)) {
+			app_fatal(StrCat("SNetRegisterEventHandler:\n", SDL_GetError()));
 		}
+	}
+}
+
+void UnregisterNetEventHandlers()
+{
+	for (auto eventType : EventTypes) {
+		SNetUnregisterEventHandler(eventType);
 	}
 }
 
@@ -421,7 +424,7 @@ bool InitSingle(GameData *gameData)
 
 	int unused = 0;
 	if (!SNetCreateGame("local", "local", (char *)&sgGameInitInfo, sizeof(sgGameInitInfo), &unused)) {
-		app_fatal(fmt::format("SNetCreateGame1:\n{}", SDL_GetError()));
+		app_fatal(StrCat("SNetCreateGame1:\n", SDL_GetError()));
 	}
 
 	MyPlayerId = 0;
@@ -442,7 +445,7 @@ bool InitMulti(GameData *gameData)
 			return false;
 		}
 
-		EventHandler(true);
+		RegisterNetEventHandlers();
 		if (UiSelectGame(gameData, &playerId))
 			break;
 
@@ -615,7 +618,7 @@ void multi_process_network_packets()
 		}
 		Point syncPosition = { pkt->px, pkt->py };
 		player.position.last = syncPosition;
-		if (dwID != MyPlayerId) {
+		if (&player != MyPlayer) {
 			assert(gbBufferMsgs != 2);
 			player._pHitPoints = pkt->php;
 			player._pMaxHP = pkt->pmhp;
@@ -627,21 +630,20 @@ void multi_process_network_packets()
 			player._pBaseDex = pkt->bdex;
 			if (!cond && player.plractive && player._pHitPoints != 0) {
 				if (player.isOnActiveLevel() && !player._pLvlChanging) {
-					int dx = abs(player.position.tile.x - pkt->px);
-					int dy = abs(player.position.tile.y - pkt->py);
-					if ((dx > 3 || dy > 3) && dPlayer[pkt->px][pkt->py] == 0) {
-						FixPlrWalkTags(dwID);
+					if (player.position.tile.WalkingDistance(syncPosition) > 3 && dPlayer[pkt->px][pkt->py] == 0) {
+						// got out of sync, clear the tiles around where we last thought the player was located
+						FixPlrWalkTags(player);
+
 						player.position.old = player.position.tile;
-						FixPlrWalkTags(dwID);
+						// then just in case clear the tiles around the current position (probably unnecessary)
+						FixPlrWalkTags(player);
 						player.position.tile = syncPosition;
 						player.position.future = syncPosition;
 						if (player.IsWalking())
 							player.position.temp = syncPosition;
 						dPlayer[player.position.tile.x][player.position.tile.y] = dwID + 1;
 					}
-					dx = abs(player.position.future.x - player.position.tile.x);
-					dy = abs(player.position.future.y - player.position.tile.y);
-					if (dx > 1 || dy > 1) {
+					if (player.position.future.WalkingDistance(player.position.tile) > 1) {
 						player.position.future = player.position.tile;
 					}
 					MakePlrPath(player, { pkt->targx, pkt->targy }, true);
@@ -702,7 +704,7 @@ void NetClose()
 	nthread_cleanup();
 	DThreadCleanup();
 	tmsg_cleanup();
-	EventHandler(false);
+	UnregisterNetEventHandlers();
 	SNetLeaveGame(3);
 	if (gbIsMultiplayer)
 		SDL_Delay(2000);
@@ -783,11 +785,11 @@ void recv_plrinfo(int pnum, const TCmdPlrInfoHdr &header, bool recv)
 {
 	static PlayerPack PackedPlayerBuffer[MAX_PLRS];
 
-	if (pnum == MyPlayerId) {
-		return;
-	}
 	assert(pnum >= 0 && pnum < MAX_PLRS);
 	Player &player = Players[pnum];
+	if (&player == MyPlayer) {
+		return;
+	}
 	auto &packedPlayer = PackedPlayerBuffer[pnum];
 
 	if (sgwPackPlrOffsetTbl[pnum] != header.wOffset) {

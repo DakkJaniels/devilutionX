@@ -5,8 +5,6 @@
  */
 #include "engine/render/scrollrt.h"
 
-#include <fmt/compile.h>
-
 #include "DiabloUI/ui_flags.hpp"
 #include "automap.h"
 #include "controls/plrctrls.h"
@@ -28,8 +26,12 @@
 #include "inv.h"
 #include "lighting.h"
 #include "minitext.h"
+#ifdef _DEBUG
+#include "miniwin/misc_msg.h"
+#endif
 #include "missiles.h"
 #include "nthread.h"
+#include "options.h"
 #include "panels/charpanel.hpp"
 #include "plrmsg.h"
 #include "qol/chatlog.h"
@@ -43,6 +45,7 @@
 #include "utils/display.h"
 #include "utils/endian.hpp"
 #include "utils/log.hpp"
+#include "utils/str_cat.hpp"
 
 #ifdef _DEBUG
 #include "debug.h"
@@ -201,7 +204,7 @@ int sgdwCursXOld;
 int sgdwCursYOld;
 
 uint32_t sgdwCursWdt;
-BYTE sgSaveBack[8192];
+uint8_t sgSaveBack[8192];
 uint32_t sgdwCursHgtOld;
 
 /**
@@ -226,7 +229,7 @@ const char *const PlayerModeNames[] = {
 	"quitting"
 };
 
-void BlitCursor(BYTE *dst, std::uint32_t dstPitch, BYTE *src, std::uint32_t srcPitch)
+void BlitCursor(uint8_t *dst, std::uint32_t dstPitch, uint8_t *src, std::uint32_t srcPitch)
 {
 	for (std::uint32_t i = 0; i < sgdwCursHgt; ++i, src += srcPitch, dst += dstPitch) {
 		memcpy(dst, src, sgdwCursWdt);
@@ -364,7 +367,7 @@ void DrawMissile(const Surface &out, Point tilePosition, Point targetBufferPosit
 void DrawMonster(const Surface &out, Point tilePosition, Point targetBufferPosition, const Monster &monster)
 {
 	if (!monster.animInfo.celSprite) {
-		Log("Draw Monster \"{}\": NULL Cel Buffer", monster.name);
+		Log("Draw Monster \"{}\": NULL Cel Buffer", monster.name());
 		return;
 	}
 
@@ -434,7 +437,7 @@ void DrawMonster(const Surface &out, Point tilePosition, Point targetBufferPosit
 	if (nCel < 0 || frames > 50 || nCel >= static_cast<int>(frames)) {
 		Log(
 		    "Draw Monster \"{}\" {}: facing {}, frame {} of {}",
-		    monster.name,
+		    monster.name(),
 		    getMonsterModeDisplayName(monster.mode),
 		    DirectionToString(monster.direction),
 		    nCel,
@@ -449,7 +452,7 @@ void DrawMonster(const Surface &out, Point tilePosition, Point targetBufferPosit
 		return;
 	}
 	uint8_t *trn = nullptr;
-	if (monster.uniqType != 0)
+	if (monster.isUnique())
 		trn = monster.uniqueMonsterTRN.get();
 	if (monster.mode == MonsterMode::Petrified)
 		trn = GetStoneTRN();
@@ -579,8 +582,7 @@ void DrawDeadPlayer(const Surface &out, Point tilePosition, Point targetBufferPo
 {
 	dFlags[tilePosition.x][tilePosition.y] &= ~DungeonFlag::DeadPlayer;
 
-	for (int i = 0; i < MAX_PLRS; i++) {
-		Player &player = Players[i];
+	for (Player &player : Players) {
 		if (player.plractive && player._pHitPoints == 0 && player.isOnActiveLevel() && player.position.tile == tilePosition) {
 			dFlags[tilePosition.x][tilePosition.y] |= DungeonFlag::DeadPlayer;
 			const Point playerRenderPosition { targetBufferPosition + player.position.offset };
@@ -764,7 +766,7 @@ void DrawMonsterHelper(const Surface &out, Point tilePosition, Point targetBuffe
 	if (!IsTileLit(tilePosition) && !MyPlayer->_pInfraFlag)
 		return;
 
-	if (mi < 0 || mi >= MaxMonsters) {
+	if (static_cast<size_t>(mi) >= MaxMonsters) {
 		Log("Draw Monster: tried to draw illegal monster {}", mi);
 		return;
 	}
@@ -866,7 +868,7 @@ void DrawDungeon(const Surface &out, Point tilePosition, Point targetBufferPosit
 	}
 	int8_t playerId = dPlayer[tilePosition.x][tilePosition.y];
 	if (playerId > 0 && playerId <= MAX_PLRS) {
-		DrawPlayerHelper(out, Players[abs(playerId) - 1], tilePosition, targetBufferPosition);
+		DrawPlayerHelper(out, Players[playerId - 1], tilePosition, targetBufferPosition);
 	}
 	if (dMonster[tilePosition.x][tilePosition.y] > 0) {
 		DrawMonsterHelper(out, tilePosition, targetBufferPosition);
@@ -1025,8 +1027,8 @@ void Zoom(const Surface &out)
 	const int srcHeight = (out.h() + 1) / 2;
 	const int doubleableHeight = out.h() / 2;
 
-	BYTE *src = out.at(srcWidth - 1, srcHeight - 1);
-	BYTE *dst = out.at(viewportOffsetX + viewportWidth - 1, out.h() - 1);
+	uint8_t *src = out.at(srcWidth - 1, srcHeight - 1);
+	uint8_t *dst = out.at(viewportOffsetX + viewportWidth - 1, out.h() - 1);
 	const bool oddViewportWidth = (viewportWidth % 2) == 1;
 
 	for (int hgt = 0; hgt < doubleableHeight; hgt++) {
@@ -1070,7 +1072,7 @@ int tileRows;
 void DrawGame(const Surface &fullOut, Point position)
 {
 	// Limit rendering to the view area
-	const Surface &out = zoomflag
+	const Surface &out = !*sgOptions.Graphics.zoom
 	    ? fullOut.subregionY(0, gnViewportHeight)
 	    : fullOut.subregionY(0, (gnViewportHeight + 1) / 2);
 
@@ -1089,7 +1091,7 @@ void DrawGame(const Surface &fullOut, Point position)
 
 	// Skip rendering parts covered by the panels
 	if (CanPanelsCoverView()) {
-		if (zoomflag) {
+		if (!*sgOptions.Graphics.zoom) {
 			if (IsLeftPanelOpen()) {
 				position += Displacement(Direction::East) * 2;
 				columns -= 4;
@@ -1164,7 +1166,7 @@ void DrawGame(const Surface &fullOut, Point position)
 	DrawFloor(out, position, { sx, sy }, rows, columns);
 	DrawTileContent(out, position, { sx, sy }, rows, columns);
 
-	if (!zoomflag) {
+	if (*sgOptions.Graphics.zoom) {
 		Zoom(fullOut.subregionY(0, gnViewportHeight));
 	}
 }
@@ -1198,11 +1200,11 @@ void DrawView(const Surface &out, Point startPosition)
 			Point pixelCoords = m.second;
 			if (megaTiles)
 				pixelCoords += Displacement { 0, TILE_HEIGHT / 2 };
-			if (!zoomflag)
+			if (*sgOptions.Graphics.zoom)
 				pixelCoords *= 2;
 			if (debugGridTextNeeded && GetDebugGridText(dunCoords, debugGridTextBuffer)) {
 				Size tileSize = { TILE_WIDTH, TILE_HEIGHT };
-				if (!zoomflag)
+				if (*sgOptions.Graphics.zoom)
 					tileSize *= 2;
 				DrawString(out, debugGridTextBuffer, { pixelCoords - Displacement { 0, tileSize.height }, tileSize }, UiFlags::ColorRed | UiFlags::AlignCenter | UiFlags::VerticalCenter);
 			}
@@ -1228,7 +1230,7 @@ void DrawView(const Surface &out, Point startPosition)
 
 				Displacement hor = { TILE_WIDTH / 2, 0 };
 				Displacement ver = { 0, TILE_HEIGHT / 2 };
-				if (!zoomflag) {
+				if (*sgOptions.Graphics.zoom) {
 					hor *= 2;
 					ver *= 2;
 				}
@@ -1326,7 +1328,7 @@ void DrawFPS(const Surface &out)
 		framesSinceLastUpdate = 0;
 
 		static char buf[12] {};
-		const char *end = fmt::format_to_n(buf, sizeof(buf), FMT_COMPILE("{} FPS"), framerate).out;
+		const char *end = BufCopy(buf, framerate, " FPS");
 		formatted = { buf, static_cast<string_view::size_type>(end - buf) };
 	};
 	DrawString(out, formatted, Point { 8, 68 }, UiFlags::ColorRed);
@@ -1448,7 +1450,7 @@ int RowsCoveredByPanel()
 	}
 
 	int rows = mainPanelSize.height / TILE_HEIGHT;
-	if (!zoomflag) {
+	if (*sgOptions.Graphics.zoom) {
 		rows /= 2;
 	}
 
@@ -1463,7 +1465,7 @@ void CalcTileOffset(int *offsetX, int *offsetY)
 	int x;
 	int y;
 
-	if (zoomflag) {
+	if (!*sgOptions.Graphics.zoom) {
 		x = screenWidth % TILE_WIDTH;
 		y = viewportHeight % TILE_HEIGHT;
 	} else {
@@ -1494,7 +1496,7 @@ void TilesInView(int *rcolumns, int *rrows)
 		rows++;
 	}
 
-	if (!zoomflag) {
+	if (*sgOptions.Graphics.zoom) {
 		// Half the number of tiles, rounded up
 		if ((columns & 1) != 0) {
 			columns++;
@@ -1545,7 +1547,7 @@ void CalcViewportGeometry()
 	}
 
 	// Slightly lower the zoomed view
-	if (!zoomflag) {
+	if (*sgOptions.Graphics.zoom) {
 		tileOffset.deltaY += TILE_HEIGHT / 4;
 		if (yo < TILE_HEIGHT / 4)
 			tileRows++;
@@ -1558,6 +1560,9 @@ extern SDL_Surface *PalSurface;
 
 void ClearScreenBuffer()
 {
+	if (HeadlessMode)
+		return;
+
 	assert(PalSurface != nullptr);
 	SDL_FillRect(PalSurface, nullptr, 0);
 }
@@ -1650,6 +1655,9 @@ void EnableFrameCount()
 
 void scrollrt_draw_game_screen()
 {
+	if (HeadlessMode)
+		return;
+
 	int hgt = 0;
 
 	if (force_redraw == 255) {
@@ -1674,7 +1682,7 @@ void scrollrt_draw_game_screen()
 
 void DrawAndBlit()
 {
-	if (!gbRunGame) {
+	if (!gbRunGame || HeadlessMode) {
 		return;
 	}
 

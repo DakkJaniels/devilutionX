@@ -31,6 +31,7 @@
 #include "levels/trigs.h"
 #include "lighting.h"
 #include "minitext.h"
+#include "miniwin/misc_msg.h"
 #include "missiles.h"
 #include "options.h"
 #include "panels/charpanel.hpp"
@@ -46,6 +47,7 @@
 #include "utils/language.h"
 #include "utils/sdl_geometry.h"
 #include "utils/stdcompat/optional.hpp"
+#include "utils/str_cat.hpp"
 #include "utils/string_or_view.hpp"
 #include "utils/utf8.hpp"
 
@@ -528,10 +530,10 @@ void DrawFlaskValues(const Surface &out, Point pos, int currValue, int maxValue)
 		DrawString(out, text, pos, color | UiFlags::KerningFitSpacing, 0);
 	};
 
-	std::string currText = fmt::format("{:d}", currValue);
+	std::string currText = StrCat(currValue);
 	drawStringWithShadow(currText, pos - Displacement { GetLineWidth(currText, GameFont12) + 1, 0 });
 	drawStringWithShadow("/", pos);
-	drawStringWithShadow(fmt::format("{:d}", maxValue), pos + Displacement { GetLineWidth("/", GameFont12) + 1, 0 });
+	drawStringWithShadow(StrCat(maxValue), pos + Displacement { GetLineWidth("/", GameFont12) + 1, 0 });
 }
 
 void control_update_life_mana()
@@ -542,30 +544,34 @@ void control_update_life_mana()
 
 void InitControlPan()
 {
-	pBtmBuff.emplace(GetMainPanel().size.width, (GetMainPanel().size.height + 16) * (IsChatAvailable() ? 2 : 1));
-	pManaBuff.emplace(88, 88);
-	pLifeBuff.emplace(88, 88);
+	if (!HeadlessMode) {
+		pBtmBuff.emplace(GetMainPanel().size.width, (GetMainPanel().size.height + 16) * (IsChatAvailable() ? 2 : 1));
+		pManaBuff.emplace(88, 88);
+		pLifeBuff.emplace(88, 88);
 
-	LoadCharPanel();
-	LoadSpellIcons();
-	{
-		const OwnedCelSprite sprite = LoadCel("CtrlPan\\Panel8.CEL", GetMainPanel().size.width);
-		CelDrawUnsafeTo(*pBtmBuff, { 0, (GetMainPanel().size.height + 16) - 1 }, CelSprite { sprite }, 0);
-	}
-	{
-		const Point bulbsPosition { 0, 87 };
-		const OwnedCelSprite statusPanel = LoadCel("CtrlPan\\P8Bulbs.CEL", 88);
-		CelDrawUnsafeTo(*pLifeBuff, bulbsPosition, CelSprite { statusPanel }, 0);
-		CelDrawUnsafeTo(*pManaBuff, bulbsPosition, CelSprite { statusPanel }, 1);
+		LoadCharPanel();
+		LoadSpellIcons();
+		{
+			const OwnedCelSprite sprite = LoadCel("CtrlPan\\Panel8.CEL", GetMainPanel().size.width);
+			CelDrawUnsafeTo(*pBtmBuff, { 0, (GetMainPanel().size.height + 16) - 1 }, CelSprite { sprite }, 0);
+		}
+		{
+			const Point bulbsPosition { 0, 87 };
+			const OwnedCelSprite statusPanel = LoadCel("CtrlPan\\P8Bulbs.CEL", 88);
+			CelDrawUnsafeTo(*pLifeBuff, bulbsPosition, CelSprite { statusPanel }, 0);
+			CelDrawUnsafeTo(*pManaBuff, bulbsPosition, CelSprite { statusPanel }, 1);
+		}
 	}
 	talkflag = false;
 	if (IsChatAvailable()) {
-		{
-			const OwnedCelSprite sprite = LoadCel("CtrlPan\\TalkPanl.CEL", GetMainPanel().size.width);
-			CelDrawUnsafeTo(*pBtmBuff, { 0, (GetMainPanel().size.height + 16) * 2 - 1 }, CelSprite { sprite }, 0);
+		if (!HeadlessMode) {
+			{
+				const OwnedCelSprite sprite = LoadCel("CtrlPan\\TalkPanl.CEL", GetMainPanel().size.width);
+				CelDrawUnsafeTo(*pBtmBuff, { 0, (GetMainPanel().size.height + 16) * 2 - 1 }, CelSprite { sprite }, 0);
+			}
+			multiButtons = LoadCel("CtrlPan\\P8But2.CEL", 33);
+			talkButtons = LoadCel("CtrlPan\\TalkButt.CEL", 61);
 		}
-		multiButtons = LoadCel("CtrlPan\\P8But2.CEL", 33);
-		talkButtons = LoadCel("CtrlPan\\TalkButt.CEL", 61);
 		sgbPlrTalkTbl = 0;
 		TalkMessage[0] = '\0';
 		for (bool &whisper : WhisperList)
@@ -573,20 +579,23 @@ void InitControlPan()
 		for (bool &talkButtonDown : TalkButtonsDown)
 			talkButtonDown = false;
 	}
-	LoadMainPanel();
 	panelflag = false;
 	lvlbtndown = false;
-	pPanelButtons = LoadCel("CtrlPan\\Panel8bu.CEL", 71);
+	if (!HeadlessMode) {
+		LoadMainPanel();
+		pPanelButtons = LoadCel("CtrlPan\\Panel8bu.CEL", 71);
+		pChrButtons = LoadCel("Data\\CharBut.CEL", 41);
+	}
 	ClearPanBtn();
 	if (!IsChatAvailable())
 		PanelButtonIndex = 6;
 	else
 		PanelButtonIndex = 8;
-	pChrButtons = LoadCel("Data\\CharBut.CEL", 41);
+	if (!HeadlessMode)
+		pDurIcons = LoadCel("Items\\DurIcons.CEL", 32);
 	for (bool &buttonEnabled : chrbtn)
 		buttonEnabled = false;
 	chrbtnactive = false;
-	pDurIcons = LoadCel("Items\\DurIcons.CEL", 32);
 	InfoString = {};
 	ClearPanel();
 	drawhpflag = true;
@@ -596,9 +605,11 @@ void InitControlPan()
 	sbooktab = 0;
 	sbookflag = false;
 
-	InitSpellBook();
-	pQLogCel = LoadCel("Data\\Quest.CEL", static_cast<uint16_t>(SidePanelSize.width));
-	pGBoxBuff = LoadCel("CtrlPan\\Golddrop.cel", 261);
+	if (!HeadlessMode) {
+		InitSpellBook();
+		pQLogCel = LoadCel("Data\\Quest.CEL", static_cast<uint16_t>(SidePanelSize.width));
+		pGBoxBuff = LoadCel("CtrlPan\\Golddrop.cel", 261);
+	}
 	CloseGoldDrop();
 	dropGoldValue = 0;
 	initialDropGoldValue = 0;
@@ -606,7 +617,8 @@ void InitControlPan()
 
 	CalculatePanelAreas();
 
-	InitModifierHints();
+	if (!HeadlessMode)
+		InitModifierHints();
 }
 
 void DrawCtrlPan(const Surface &out)
@@ -737,7 +749,7 @@ void CheckPanelInfo()
 		AddPanelString(_("Hotkey: 's'"));
 		Player &myPlayer = *MyPlayer;
 		const spell_id spellId = myPlayer._pRSpell;
-		if (spellId != SPL_INVALID && spellId != SPL_NULL) {
+		if (IsValidSpell(spellId)) {
 			switch (myPlayer._pRSplType) {
 			case RSPLTYPE_SKILL:
 				AddPanelString(fmt::format(fmt::runtime(_("{:s} Skill")), pgettext("spell", spelldata[spellId].sSkillText)));
@@ -905,9 +917,9 @@ void DrawInfoBox(const Surface &out)
 			if (leveltype != DTYPE_TOWN) {
 				const auto &monster = Monsters[pcursmonst];
 				InfoColor = UiFlags::ColorWhite;
-				InfoString = string_view(monster.name);
+				InfoString = monster.name();
 				ClearPanel();
-				if (monster.uniqType != 0) {
+				if (monster.isUnique()) {
 					InfoColor = UiFlags::ColorWhitegold;
 					PrintUniqueHistory();
 				} else {
@@ -1078,9 +1090,9 @@ void DrawGoldSplit(const Surface &out, int amount)
 	//  for the text entered by the player.
 	DrawString(out, wrapped, { GetPanelPosition(UiPanels::Inventory, { dialogX + 31, 75 }), { 200, 50 } }, UiFlags::ColorWhitegold | UiFlags::AlignCenter, 1, 17);
 
-	std::string value = "";
+	std::string value;
 	if (amount > 0) {
-		value = fmt::format("{:d}", amount);
+		value = StrCat(amount);
 	}
 	// Even a ten digit amount of gold only takes up about half a line. There's no need to wrap or clip text here so we
 	// use the Point form of DrawString.
@@ -1140,10 +1152,10 @@ void DrawTalkPan(const Surface &out)
 	x += 46;
 	int talkBtn = 0;
 	for (int i = 0; i < 4; i++) {
-		if (i == MyPlayerId)
+		Player &player = Players[i];
+		if (&player == MyPlayer)
 			continue;
 
-		Player &player = Players[i];
 		UiFlags color = player.friendlyMode ? UiFlags::ColorWhitegold : UiFlags::ColorRed;
 		const Point talkPanPosition = mainPanelPosition + Displacement { 172, 84 + 18 * talkBtn };
 		if (WhisperList[i]) {

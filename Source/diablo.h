@@ -60,12 +60,11 @@ enum class MouseActionType : int {
 
 extern uint32_t glSeedTbl[NUMLEVELS];
 extern Point MousePosition;
-extern bool gbRunGame;
+extern DVL_API_FOR_TEST bool gbRunGame;
 extern bool gbRunGameResult;
 extern bool ReturnToMainMenu;
-extern DVL_API_FOR_TEST bool zoomflag;
 extern bool gbProcessPlayers;
-extern bool gbLoadGame;
+extern DVL_API_FOR_TEST bool gbLoadGame;
 extern bool cineflag;
 extern int force_redraw;
 /* These are defined in fonts.h */
@@ -74,15 +73,16 @@ extern DVL_API_FOR_TEST int PauseMode;
 extern bool gbBard;
 extern bool gbBarbarian;
 /**
- * @brief Don't show Messageboxes or other user-interaction. Needed for UnitTests.
+ * @brief Don't load UI or show Messageboxes or other user-interaction. Needed for UnitTests.
  */
-extern DVL_API_FOR_TEST bool gbQuietMode;
+extern DVL_API_FOR_TEST bool HeadlessMode;
 extern clicktype sgbMouseDown;
 extern uint16_t gnTickDelay;
 extern char gszProductName[64];
 
 extern MouseActionType LastMouseButtonAction;
 
+void InitKeymapActions();
 void FreeGameMem();
 bool StartGame(bool bNewGame, bool bSinglePlayer);
 [[noreturn]] void diablo_quit(int exitStatus);
@@ -93,7 +93,7 @@ bool diablo_is_focused();
 void diablo_focus_pause();
 void diablo_focus_unpause();
 bool PressEscKey();
-void DisableInputWndProc(uint32_t uMsg, int32_t wParam, int32_t lParam);
+void DisableInputEventHandler(uint32_t uMsg, int32_t wParam, int32_t lParam);
 void LoadGameLevel(bool firstflag, lvl_entry lvldir);
 
 /**

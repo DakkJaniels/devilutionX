@@ -282,10 +282,7 @@ void InitQuests()
 void InitialiseQuestPools(uint32_t seed, Quest quests[])
 {
 	SetRndSeed(seed);
-	if (FlipCoin())
-		quests[Q_PWATER]._qactive = QUEST_NOTAVAIL;
-	else
-		quests[Q_SKELKING]._qactive = QUEST_NOTAVAIL;
+	quests[PickRandomlyAmong({ Q_SKELKING, Q_PWATER })]._qactive = QUEST_NOTAVAIL;
 
 	// using int and not size_t here to detect negative values from GenerateRnd
 	int randomIndex = GenerateRnd(sizeof(QuestGroup1) / sizeof(*QuestGroup1));
@@ -418,13 +415,13 @@ void CheckQuestKill(const Monster &monster, bool sendmsg)
 		myPlayer.Say(HeroSpeech::TheSpiritsOfTheDeadAreNowAvenged, 30);
 		if (sendmsg)
 			NetSendCmdQuest(true, quest);
-	} else if (monster.uniqType - 1 == UMT_GARBUD) { //"Gharbad the Weak"
+	} else if (monster.uniqueType == UniqueMonsterType::Garbud) { //"Gharbad the Weak"
 		Quests[Q_GARBUD]._qactive = QUEST_DONE;
 		myPlayer.Say(HeroSpeech::ImNotImpressed, 30);
-	} else if (monster.uniqType - 1 == UMT_ZHAR) { //"Zhar the Mad"
+	} else if (monster.uniqueType == UniqueMonsterType::Zhar) { //"Zhar the Mad"
 		Quests[Q_ZHAR]._qactive = QUEST_DONE;
 		myPlayer.Say(HeroSpeech::ImSorryDidIBreakYourConcentration, 30);
-	} else if (monster.uniqType - 1 == UMT_LAZARUS) { //"Arch-Bishop Lazarus"
+	} else if (monster.uniqueType == UniqueMonsterType::Lazarus) { //"Arch-Bishop Lazarus"
 		auto &betrayerQuest = Quests[Q_BETRAYER];
 		betrayerQuest._qactive = QUEST_DONE;
 		myPlayer.Say(HeroSpeech::YourMadnessEndsHereBetrayer, 30);
@@ -451,7 +448,7 @@ void CheckQuestKill(const Monster &monster, bool sendmsg)
 			betrayerQuest._qvar2 = 4;
 			AddMissile({ 35, 32 }, { 35, 32 }, Direction::South, MIS_RPORTAL, TARGET_MONSTERS, MyPlayerId, 0, 0);
 		}
-	} else if (monster.uniqType - 1 == UMT_WARLORD) { //"Warlord of Blood"
+	} else if (monster.uniqueType == UniqueMonsterType::WarlordOfBlood) {
 		Quests[Q_WARLORD]._qactive = QUEST_DONE;
 		myPlayer.Say(HeroSpeech::YourReignOfPainHasEnded, 30);
 	}

@@ -671,15 +671,7 @@ struct Player {
 	 * @brief Sets the readied spell to the spell in the specified equipment slot. Does nothing if the item does not have a valid spell.
 	 * @param bodyLocation - the body location whose item will be checked for the spell.
 	 */
-	void ReadySpellFromEquipment(inv_body_loc bodyLocation)
-	{
-		auto &item = InvBody[bodyLocation];
-		if (item._itype == ItemType::Staff && item._iSpell != SPL_NULL && item._iCharges > 0) {
-			_pRSpell = item._iSpell;
-			_pRSplType = RSPLTYPE_CHARGES;
-			force_redraw = 255;
-		}
-	}
+	void ReadySpellFromEquipment(inv_body_loc bodyLocation);
 
 	/**
 	 * @brief Does the player currently have a ranged weapon equipped?
@@ -749,6 +741,8 @@ extern DVL_API_FOR_TEST Player Players[MAX_PLRS];
 extern bool MyPlayerIsDead;
 extern const int BlockBonuses[enum_size<HeroClass>::value];
 
+Player *PlayerAtPosition(Point position);
+
 void LoadPlrGFX(Player &player, player_graphic graphic);
 void InitPlayerGFX(Player &player);
 void ResetPlayerGFX(Player &player);
@@ -773,7 +767,7 @@ void NextPlrLevel(Player &player);
 #endif
 void AddPlrExperience(Player &player, int lvl, int exp);
 void AddPlrMonstExper(int lvl, int exp, char pmask);
-void ApplyPlrDamage(int pnum, int dam, int minHP = 0, int frac = 0, int earflag = 0);
+void ApplyPlrDamage(Player &player, int dam, int minHP = 0, int frac = 0, int earflag = 0);
 void InitPlayer(Player &player, bool FirstTime);
 void InitMultiView();
 void PlrClrTrans(Point position);
@@ -781,16 +775,15 @@ void PlrDoTrans(Point position);
 void SetPlayerOld(Player &player);
 void FixPlayerLocation(Player &player, Direction bDir);
 void StartStand(int pnum, Direction dir);
-void StartPlrBlock(int pnum, Direction dir);
-void FixPlrWalkTags(int pnum);
-void RemovePlrFromMap(int pnum);
+void StartPlrBlock(Player &player, Direction dir);
+void FixPlrWalkTags(const Player &player);
 void StartPlrHit(int pnum, int dam, bool forcehit);
-void StartPlayerKill(int pnum, int earflag);
+void StartPlayerKill(Player &player, int earflag);
 /**
  * @brief Strip the top off gold piles that are larger than MaxGold
  */
 void StripTopGold(Player &player);
-void SyncPlrKill(int pnum, int earflag);
+void SyncPlrKill(Player &player, int earflag);
 void RemovePlrMissiles(const Player &player);
 void StartNewLvl(int pnum, interface_mode fom, int lvl);
 void RestartTownLvl(int pnum);

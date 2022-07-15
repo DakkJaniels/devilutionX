@@ -16,6 +16,7 @@
 #include "dead.h"
 #ifdef _DEBUG
 #include "debug.h"
+#include "miniwin/misc_msg.h"
 #endif
 #include "DiabloUI/diabloui.h"
 #include "controls/plrctrls.h"
@@ -95,7 +96,6 @@ Point MousePosition;
 bool gbRunGame;
 bool gbRunGameResult;
 bool ReturnToMainMenu;
-bool zoomflag;
 /** Enable updating of player character, set to false once Diablo dies */
 bool gbProcessPlayers;
 bool gbLoadGame;
@@ -104,7 +104,7 @@ int force_redraw;
 int PauseMode;
 bool gbBard;
 bool gbBarbarian;
-bool gbQuietMode = false;
+bool HeadlessMode = false;
 clicktype sgbMouseDown;
 uint16_t gnTickDelay = 50;
 char gszProductName[64] = "DevilutionX vUnknown";
@@ -147,14 +147,13 @@ bool was_ui_init = false;
 
 void StartGame(interface_mode uMsg)
 {
-	zoomflag = true;
 	CalcViewportGeometry();
 	cineflag = false;
 	InitCursor();
 #ifdef _DEBUG
 	LoadDebugGFX();
 #endif
-	assert(ghMainWnd);
+	assert(HeadlessMode || ghMainWnd);
 	music_stop();
 	InitMonsterHealthBar();
 	InitXPBar();
@@ -716,13 +715,12 @@ void RunGameLoop(interface_mode uMsg)
 {
 	demo::NotifyGameLoopStart();
 
-	WNDPROC saveProc;
 	tagMSG msg;
 
 	nthread_ignore_mutex(true);
 	StartGame(uMsg);
-	assert(ghMainWnd);
-	saveProc = SetWindowProc(GameEventHandler);
+	assert(HeadlessMode || ghMainWnd);
+	EventHandler previousHandler = SetEventHandler(GameEventHandler);
 	run_delta_info();
 	gbRunGame = true;
 	gbProcessPlayers = true;
@@ -805,8 +803,8 @@ void RunGameLoop(interface_mode uMsg)
 	ClearScreenBuffer();
 	force_redraw = 255;
 	scrollrt_draw_game_screen();
-	saveProc = SetWindowProc(saveProc);
-	assert(saveProc == GameEventHandler);
+	previousHandler = SetEventHandler(previousHandler);
+	assert(HeadlessMode || previousHandler == GameEventHandler);
 	FreeGame();
 
 	if (cineflag) {
@@ -928,7 +926,7 @@ void DiabloParseFlags(int argc, char **argv)
 				diablo_quit(0);
 			}
 			recordNumber = SDL_atoi(argv[++i]);
-		} else if (strcasecmp("--create-reference", argv[i]) == 0) {
+		} else if (arg == "--create-reference") {
 			createDemoReference = true;
 		} else if (arg == "-n") {
 			gbShowIntro = false;
@@ -1217,7 +1215,7 @@ void UnstuckChargers()
 			return;
 		}
 	}
-	for (int i = 0; i < ActiveMonsterCount; i++) {
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
 		auto &monster = Monsters[ActiveMonsters[i]];
 		if (monster.mode == MonsterMode::Charge)
 			monster.mode = MonsterMode::Stand;
@@ -1226,7 +1224,7 @@ void UnstuckChargers()
 
 void UpdateMonsterLights()
 {
-	for (int i = 0; i < ActiveMonsterCount; i++) {
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
 		auto &monster = Monsters[ActiveMonsters[i]];
 
 		if ((monster.flags & MFLAG_BERSERK) != 0) {
@@ -1456,6 +1454,7 @@ bool CanPlayerTakeAction()
 {
 	return !IsPlayerDead() && IsGameRunning();
 }
+} // namespace
 
 void InitKeymapActions()
 {
@@ -1628,7 +1627,7 @@ void InitKeymapActions()
 	    N_("Zoom Game Screen."),
 	    'Z',
 	    [] {
-		    zoomflag = !zoomflag;
+		    sgOptions.Graphics.zoom.SetValue(!*sgOptions.Graphics.zoom);
 		    CalcViewportGeometry();
 	    },
 	    nullptr,
@@ -1703,7 +1702,6 @@ void InitKeymapActions()
 	    });
 #endif
 }
-} // namespace
 
 void FreeGameMem()
 {
@@ -2038,7 +2036,7 @@ bool PressEscKey()
 	return rv;
 }
 
-void DisableInputWndProc(uint32_t uMsg, int32_t /*wParam*/, int32_t lParam)
+void DisableInputEventHandler(uint32_t uMsg, int32_t /*wParam*/, int32_t lParam)
 {
 	switch (uMsg) {
 	case DVL_WM_KEYDOWN:
@@ -2095,13 +2093,18 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 	IncProgress();
 
 	if (firstflag) {
-		InitInv();
-		InitStash();
-		InitQuestText();
-		InitInfoBoxGfx();
+		CloseInventory();
+		drawsbarflag = false;
+		qtextflag = false;
+		if (!HeadlessMode) {
+			InitInv();
+			InitStash();
+			InitQuestText();
+			InitInfoBoxGfx();
+			InitHelp();
+		}
 		InitStores();
 		InitAutomapOnce();
-		InitHelp();
 	}
 	SetRndSeed(glSeedTbl[currlevel]);
 
@@ -2137,8 +2140,9 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		if (leveltype != DTYPE_TOWN) {
 			GetLevelMTypes();
 			InitThemes();
-			LoadAllGFX();
-		} else {
+			if (!HeadlessMode)
+				LoadAllGFX();
+		} else if (!HeadlessMode) {
 			IncProgress();
 #if !defined(USE_SDL1) && !defined(__vita__)
 			InitVirtualGamepadGFX(renderer);
@@ -2171,9 +2175,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		IncProgress();
 
 		bool visited = false;
-		int players = gbIsMultiplayer ? MAX_PLRS : 1;
-		for (int i = 0; i < players; i++) {
-			Player &player = Players[i];
+		for (const Player &player : Players) {
 			if (player.plractive)
 				visited = visited || player._pLvlVisited[currlevel];
 		}
@@ -2245,11 +2247,13 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		InitGolems();
 		InitMonsters();
 		IncProgress();
+		if (!HeadlessMode) {
 #if !defined(USE_SDL1) && !defined(__vita__)
-		InitVirtualGamepadGFX(renderer);
+			InitVirtualGamepadGFX(renderer);
 #endif
-		InitMissileGFX(gbIsHellfire);
-		IncProgress();
+			InitMissileGFX(gbIsHellfire);
+			IncProgress();
+		}
 		InitCorpses();
 		IncProgress();
 		LoadLevelSOLData();
@@ -2288,7 +2292,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 
 	for (int i = 0; i < MAX_PLRS; i++) {
 		Player &player = Players[i];
-		if (player.plractive && player.isOnActiveLevel() && (!player._pLvlChanging || i == MyPlayerId)) {
+		if (player.plractive && player.isOnActiveLevel() && (!player._pLvlChanging || &player == MyPlayer)) {
 			if (player._pHitPoints > 0) {
 				if (!gbIsMultiplayer)
 					dPlayer[player.position.tile.x][player.position.tile.y] = i + 1;
@@ -2303,7 +2307,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 	IncProgress();
 	IncProgress();
 
-	if (firstflag) {
+	if (firstflag && !HeadlessMode) {
 		InitControlPan();
 	}
 	IncProgress();
@@ -2334,10 +2338,7 @@ void LoadGameLevel(bool firstflag, lvl_entry lvldir)
 		music_mute();
 	}
 
-	if (firstflag) {
-		while (!IncProgress())
-			;
-	}
+	CompleteProgress();
 
 	if (!gbIsSpawn && setlevel && setlvlnum == SL_SKELKING && Quests[Q_SKELKING]._qactive == QUEST_ACTIVE)
 		PlaySFX(USFX_SKING1);

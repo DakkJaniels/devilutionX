@@ -24,6 +24,8 @@ std::array<uint8_t, LIGHTSIZE> LightTables;
 bool DisableLighting;
 bool UpdateLighting;
 
+namespace {
+
 /*
  * X- Y-coordinate offsets of lighting visions.
  * The last entry-pair is only for alignment.
@@ -56,14 +58,12 @@ const uint8_t VisionCrawlTable[23][30] = {
 	// clang-format on
 };
 
-namespace {
-
 uint8_t lightradius[16][128];
 bool dovision;
 uint8_t lightblock[64][16][16];
 
 /** RadiusAdj maps from VisionCrawlTable index to lighting vision radius adjustment. */
-const BYTE RadiusAdj[23] = { 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 4, 3, 2, 2, 2, 1, 1, 1, 0, 0, 0, 0 };
+const uint8_t RadiusAdj[23] = { 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 4, 3, 2, 2, 2, 1, 1, 1, 0, 0, 0, 0 };
 
 void RotateRadius(int *x, int *y, int *dx, int *dy, int *lx, int *ly, int *bx, int *by)
 {
@@ -128,7 +128,67 @@ void DoUnLight(int nXPos, int nYPos, int nRadius)
 	}
 }
 
+bool CrawlFlipsX(Displacement mirrored, tl::function_ref<bool(Displacement)> function)
+{
+	for (const Displacement displacement : { mirrored.flipX(), mirrored }) {
+		if (!function(displacement))
+			return false;
+	}
+	return true;
+}
+
+bool CrawlFlipsY(Displacement mirrored, tl::function_ref<bool(Displacement)> function)
+{
+	for (const Displacement displacement : { mirrored, mirrored.flipY() }) {
+		if (!function(displacement))
+			return false;
+	}
+	return true;
+}
+
+bool CrawlFlipsXY(Displacement mirrored, tl::function_ref<bool(Displacement)> function)
+{
+	for (const Displacement displacement : { mirrored.flipX(), mirrored, mirrored.flipXY(), mirrored.flipY() }) {
+		if (!function(displacement))
+			return false;
+	}
+	return true;
+}
+
 } // namespace
+
+bool DoCrawl(unsigned radius, tl::function_ref<bool(Displacement)> function)
+{
+	if (radius == 0)
+		return function(Displacement { 0, 0 });
+
+	if (!CrawlFlipsY({ 0, static_cast<int>(radius) }, function))
+		return false;
+	for (unsigned i = 1; i < radius; i++) {
+		if (!CrawlFlipsXY({ static_cast<int>(i), static_cast<int>(radius) }, function))
+			return false;
+	}
+	if (radius > 1) {
+		if (!CrawlFlipsXY({ static_cast<int>(radius) - 1, static_cast<int>(radius) - 1 }, function))
+			return false;
+	}
+	if (!CrawlFlipsX({ static_cast<int>(radius), 0 }, function))
+		return false;
+	for (unsigned i = 1; i < radius; i++) {
+		if (!CrawlFlipsXY({ static_cast<int>(radius), static_cast<int>(i) }, function))
+			return false;
+	}
+	return true;
+}
+
+bool DoCrawl(unsigned minRadius, unsigned maxRadius, tl::function_ref<bool(Displacement)> function)
+{
+	for (unsigned i = minRadius; i <= maxRadius; i++) {
+		if (!DoCrawl(i, function))
+			return false;
+	}
+	return true;
+}
 
 void DoLighting(Point position, int nRadius, int lnum)
 {
@@ -368,7 +428,7 @@ void MakeLightTable()
 	}
 
 	if (leveltype == DTYPE_HELL) {
-		BYTE blood[16];
+		uint8_t blood[16];
 		tbl = LightTables.data();
 		for (int i = 0; i < lights; i++) {
 			int l1 = lights - i;
@@ -460,7 +520,7 @@ void MakeLightTable()
 				lightradius[j][i] = 15;
 			} else {
 				double fs = (double)15 * i / ((double)8 * (j + 1));
-				lightradius[j][i] = (BYTE)(fs + 0.5);
+				lightradius[j][i] = static_cast<uint8_t>(fs + 0.5);
 			}
 		}
 	}
@@ -470,10 +530,10 @@ void MakeLightTable()
 			double fa = (sqrt((double)(16 - j))) / 128;
 			fa *= fa;
 			for (int i = 0; i < 128; i++) {
-				lightradius[15 - j][i] = 15 - (BYTE)(fa * (double)((128 - i) * (128 - i)));
+				lightradius[15 - j][i] = 15 - static_cast<uint8_t>(fa * (double)((128 - i) * (128 - i)));
 				if (lightradius[15 - j][i] > 15)
 					lightradius[15 - j][i] = 0;
-				lightradius[15 - j][i] = lightradius[15 - j][i] - (BYTE)((15 - j) / 2);
+				lightradius[15 - j][i] = lightradius[15 - j][i] - static_cast<uint8_t>((15 - j) / 2);
 				if (lightradius[15 - j][i] > 15)
 					lightradius[15 - j][i] = 0;
 			}

@@ -14,6 +14,7 @@
 #include "init.h"
 #include "loadsave.h"
 #include "menu.h"
+#include "miniwin/miniwin.h"
 #include "mpq/mpq_reader.hpp"
 #include "pack.h"
 #include "qol/stash.h"
@@ -21,6 +22,8 @@
 #include "utils/file_util.h"
 #include "utils/language.h"
 #include "utils/paths.h"
+#include "utils/stdcompat/string_view.hpp"
+#include "utils/str_cat.hpp"
 #include "utils/utf8.hpp"
 
 namespace devilution {
@@ -37,50 +40,20 @@ namespace {
 /** List of character names for the character selection screen. */
 char hero_names[MAX_CHARACTERS][PlayerNameLength];
 
-std::string GetSavePath(uint32_t saveNum, std::string savePrefix = "")
+std::string GetSavePath(uint32_t saveNum, string_view savePrefix = {})
 {
-	std::string path = paths::PrefPath();
-	const char *ext = ".sv";
-	if (gbIsHellfire)
-		ext = ".hsv";
-
-	path.append(savePrefix);
-
-	if (gbIsSpawn) {
-		if (!gbIsMultiplayer) {
-			path.append("spawn_");
-		} else {
-			path.append("share_");
-		}
-	} else {
-		if (!gbIsMultiplayer) {
-			path.append("single_");
-		} else {
-			path.append("multi_");
-		}
-	}
-
-	char saveNumStr[21];
-	*fmt::format_to(saveNumStr, FMT_COMPILE("{}"), saveNum) = '\0';
-	path.append(saveNumStr);
-	path.append(ext);
-	return path;
+	return StrCat(paths::PrefPath(), savePrefix,
+	    gbIsSpawn
+	        ? (gbIsMultiplayer ? "share_" : "spawn_")
+	        : (gbIsMultiplayer ? "multi_" : "single_"),
+	    saveNum, gbIsHellfire ? ".hsv" : ".sv");
 }
 
 std::string GetStashSavePath()
 {
-	std::string path = paths::PrefPath();
-	const char *ext = ".sv";
-	if (gbIsHellfire)
-		ext = ".hsv";
-
-	if (gbIsSpawn) {
-		path.append("stash_spawn");
-	} else {
-		path.append("stash");
-	}
-	path.append(ext);
-	return path;
+	return StrCat(paths::PrefPath(),
+	    gbIsSpawn ? "stash_spawn" : "stash",
+	    gbIsHellfire ? ".hsv" : ".sv");
 }
 
 bool GetSaveNames(uint8_t index, string_view prefix, char *out)
@@ -316,19 +289,19 @@ void pfile_write_hero(bool writeGameData)
 
 void pfile_write_hero_demo(int demo)
 {
-	std::string savePath = GetSavePath(gSaveNumber, fmt::format("demo_{}_reference_", demo));
+	std::string savePath = GetSavePath(gSaveNumber, StrCat("demo_", demo, "_reference_"));
 	auto saveWriter = MpqWriter(savePath.c_str());
 	pfile_write_hero(saveWriter, true);
 }
 
 HeroCompareResult pfile_compare_hero_demo(int demo)
 {
-	std::string referenceSavePath = GetSavePath(gSaveNumber, fmt::format("demo_{}_reference_", demo));
+	std::string referenceSavePath = GetSavePath(gSaveNumber, StrCat("demo_", demo, "_reference_"));
 
 	if (!FileExists(referenceSavePath.c_str()))
 		return HeroCompareResult::ReferenceNotFound;
 
-	std::string actualSavePath = GetSavePath(gSaveNumber, fmt::format("demo_{}_actual_", demo));
+	std::string actualSavePath = GetSavePath(gSaveNumber, StrCat("demo_", demo, "_actual_"));
 	{
 		MpqWriter saveWriter(actualSavePath.c_str());
 		pfile_write_hero(saveWriter, true);
@@ -437,7 +410,7 @@ bool pfile_delete_save(_uiheroinfo *heroInfo)
 	uint32_t saveNum = heroInfo->saveNumber;
 	if (saveNum < MAX_CHARACTERS) {
 		hero_names[saveNum][0] = '\0';
-		RemoveFile(GetSavePath(saveNum));
+		RemoveFile(GetSavePath(saveNum).c_str());
 	}
 	return true;
 }

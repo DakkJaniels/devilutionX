@@ -20,7 +20,7 @@
 #include "engine/random.hpp"
 #include "engine/world_tile.hpp"
 #include "gamemenu.h"
-#include "levels/drlg_l1.h"
+#include "levels/crypt.h"
 #include "levels/town.h"
 #include "levels/trigs.h"
 #include "lighting.h"
@@ -36,6 +36,7 @@
 #include "tmsg.h"
 #include "towners.h"
 #include "utils/language.h"
+#include "utils/str_cat.hpp"
 #include "utils/utf8.hpp"
 
 namespace devilution {
@@ -239,19 +240,18 @@ void PrePacket()
 				return;
 			}
 
-			uint32_t size = ParseCmd(playerId, (TCmd *)data);
+			size_t size = ParseCmd(playerId, (TCmd *)data);
 			if (size == 0) {
 				Log("Discarding bad network message");
 				return;
 			}
-			uint32_t pktSize = size;
-			data += pktSize;
-			spaceLeft -= pktSize;
+			data += size;
+			spaceLeft -= size;
 		}
 	}
 }
 
-void SendPacket(int pnum, const void *packet, DWORD dwSize)
+void SendPacket(int pnum, const void *packet, size_t dwSize)
 {
 	TFakeCmdPlr cmd;
 
@@ -271,7 +271,7 @@ void SendPacket(int pnum, const void *packet, DWORD dwSize)
 
 int WaitForTurns()
 {
-	DWORD turns;
+	uint32_t turns;
 
 	if (sgbDeltaChunks == 0) {
 		nthread_send_and_recv_turn(0, 0);
@@ -346,7 +346,7 @@ size_t DeltaImportObject(const byte *src, DObjectStr *dst)
 
 byte *DeltaExportMonster(byte *dst, const DMonsterStr *src)
 {
-	for (int i = 0; i < MaxMonsters; i++, src++) {
+	for (size_t i = 0; i < MaxMonsters; i++, src++) {
 		if (src->position.x == 0xFF) {
 			*dst++ = byte { 0xFF };
 		} else {
@@ -361,7 +361,7 @@ byte *DeltaExportMonster(byte *dst, const DMonsterStr *src)
 void DeltaImportMonster(const byte *src, DMonsterStr *dst)
 {
 	size_t size = 0;
-	for (int i = 0; i < MaxMonsters; i++, dst++) {
+	for (size_t i = 0; i < MaxMonsters; i++, dst++) {
 		if (src[size] == byte { 0xFF }) {
 			memset(dst, 0xFF, sizeof(DMonsterStr));
 			size++;
@@ -430,7 +430,7 @@ uint32_t CompressData(byte *buffer, byte *end)
 	return pkSize + 1;
 }
 
-void DeltaImportData(_cmd_id cmd, DWORD recvOffset)
+void DeltaImportData(_cmd_id cmd, uint32_t recvOffset)
 {
 	if (sgRecvBuf[0] != byte { 0 })
 		PkwareDecompress(&sgRecvBuf[1], recvOffset, sizeof(sgRecvBuf) - 1);
@@ -446,14 +446,14 @@ void DeltaImportData(_cmd_id cmd, DWORD recvOffset)
 		src += DeltaImportObject(src, deltaLevel.object);
 		DeltaImportMonster(src, deltaLevel.monster);
 	} else {
-		app_fatal(fmt::format("Unkown network message type: {}", cmd));
+		app_fatal(StrCat("Unkown network message type: ", cmd));
 	}
 
 	sgbDeltaChunks++;
 	sgbDeltaChanged = true;
 }
 
-DWORD OnLevelData(int pnum, const TCmd *pCmd)
+size_t OnLevelData(int pnum, const TCmd *pCmd)
 {
 	const auto &message = *reinterpret_cast<const TCmdPlrInfoHdr *>(pCmd);
 
@@ -520,7 +520,7 @@ void DeltaLeaveSync(uint8_t bLevel)
 
 	DLevel &deltaLevel = GetDeltaLevel(bLevel);
 
-	for (int i = 0; i < ActiveMonsterCount; i++) {
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
 		int ma = ActiveMonsters[i];
 		auto &monster = Monsters[ma];
 		if (monster.hitPoints == 0)
@@ -638,22 +638,21 @@ void DeltaPutItem(const TCmdPItem &message, Point position, const Player &player
 
 bool IOwnLevel(const Player &player)
 {
-	int i;
-
-	for (i = 0; i < MAX_PLRS; i++) {
-		if (!Players[i].plractive)
+	for (const Player &other : Players) {
+		if (!other.plractive)
 			continue;
-		if (Players[i]._pLvlChanging)
+		if (other._pLvlChanging)
 			continue;
-		if (Players[i].plrlevel != player.plrlevel)
+		if (other.plrlevel != player.plrlevel)
 			continue;
-		if (Players[i].plrIsOnSetLevel != player.plrIsOnSetLevel)
+		if (other.plrIsOnSetLevel != player.plrIsOnSetLevel)
 			continue;
-		if (i == MyPlayerId && gbBufferMsgs != 0)
+		if (&other == MyPlayer && gbBufferMsgs != 0)
 			continue;
-		break;
+		return &other == MyPlayer;
 	}
-	return i == MyPlayerId;
+
+	return false;
 }
 
 void DeltaOpenPortal(int pnum, Point position, uint8_t bLevel, dungeon_type bLType, bool bSetLvl)
@@ -727,7 +726,7 @@ void NetSendCmdExtra(const TCmdGItem &item)
 	NetSendHiPri(MyPlayerId, (byte *)&cmd, sizeof(cmd));
 }
 
-DWORD OnWalk(const TCmd *pCmd, Player &player)
+size_t OnWalk(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLoc *>(pCmd);
 	const Point position { message.x, message.y };
@@ -741,7 +740,7 @@ DWORD OnWalk(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnAddStrength(const TCmd *pCmd, int pnum)
+size_t OnAddStrength(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -753,7 +752,7 @@ DWORD OnAddStrength(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnAddMagic(const TCmd *pCmd, int pnum)
+size_t OnAddMagic(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -765,7 +764,7 @@ DWORD OnAddMagic(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnAddDexterity(const TCmd *pCmd, int pnum)
+size_t OnAddDexterity(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -777,7 +776,7 @@ DWORD OnAddDexterity(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnAddVitality(const TCmd *pCmd, int pnum)
+size_t OnAddVitality(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -789,7 +788,7 @@ DWORD OnAddVitality(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnGotoGetItem(const TCmd *pCmd, Player &player)
+size_t OnGotoGetItem(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam1 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -830,7 +829,7 @@ bool IsPItemValid(const TCmdPItem &message)
 	return IsItemAvailable(message.wIndx);
 }
 
-DWORD OnRequestGetItem(const TCmd *pCmd, Player &player)
+size_t OnRequestGetItem(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdGItem *>(pCmd);
 
@@ -869,7 +868,7 @@ DWORD OnRequestGetItem(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnGetItem(const TCmd *pCmd, int pnum)
+size_t OnGetItem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdGItem *>(pCmd);
 
@@ -901,7 +900,7 @@ DWORD OnGetItem(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnGotoAutoGetItem(const TCmd *pCmd, Player &player)
+size_t OnGotoAutoGetItem(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam1 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -915,7 +914,7 @@ DWORD OnGotoAutoGetItem(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnRequestAutoGetItem(const TCmd *pCmd, Player &player)
+size_t OnRequestAutoGetItem(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdGItem *>(pCmd);
 
@@ -938,7 +937,7 @@ DWORD OnRequestAutoGetItem(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnAutoGetItem(const TCmd *pCmd, int pnum)
+size_t OnAutoGetItem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdGItem *>(pCmd);
 
@@ -970,7 +969,7 @@ DWORD OnAutoGetItem(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnItemExtra(const TCmd *pCmd, int pnum)
+size_t OnItemExtra(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdGItem *>(pCmd);
 
@@ -987,7 +986,7 @@ DWORD OnItemExtra(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnPutItem(const TCmd *pCmd, int pnum)
+size_t OnPutItem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdPItem *>(pCmd);
 
@@ -998,7 +997,7 @@ DWORD OnPutItem(const TCmd *pCmd, int pnum)
 		Player &player = Players[pnum];
 		if (player.isOnActiveLevel()) {
 			int ii;
-			if (pnum == MyPlayerId)
+			if (&player == MyPlayer)
 				ii = InvPutItem(player, position, ItemLimbo);
 			else
 				ii = SyncPutItem(player, position, message.wIndx, message.wCI, message.dwSeed, message.bId, message.bDur, message.bMDur, message.bCh, message.bMCh, message.wValue, message.dwBuff, message.wToHit, message.wMaxDam, message.bMinStr, message.bMinMag, message.bMinDex, message.bAC);
@@ -1018,7 +1017,7 @@ DWORD OnPutItem(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnSyncPutItem(const TCmd *pCmd, int pnum)
+size_t OnSyncPutItem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdPItem *>(pCmd);
 
@@ -1045,7 +1044,7 @@ DWORD OnSyncPutItem(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnRespawnItem(const TCmd *pCmd, int pnum)
+size_t OnRespawnItem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdPItem *>(pCmd);
 
@@ -1054,7 +1053,7 @@ DWORD OnRespawnItem(const TCmd *pCmd, int pnum)
 	} else if (IsPItemValid(message)) {
 		const Point position { message.x, message.y };
 		Player &player = Players[pnum];
-		if (player.isOnActiveLevel() && pnum != MyPlayerId) {
+		if (player.isOnActiveLevel() && &player != MyPlayer) {
 			SyncPutItem(player, position, message.wIndx, message.wCI, message.dwSeed, message.bId, message.bDur, message.bMDur, message.bCh, message.bMCh, message.wValue, message.dwBuff, message.wToHit, message.wMaxDam, message.bMinStr, message.bMinMag, message.bMinDex, message.bAC);
 		}
 		PutItemRecord(message.dwSeed, message.wCI, message.wIndx);
@@ -1064,7 +1063,7 @@ DWORD OnRespawnItem(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnAttackTile(const TCmd *pCmd, Player &player)
+size_t OnAttackTile(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLoc *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1079,7 +1078,7 @@ DWORD OnAttackTile(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnStandingAttackTile(const TCmd *pCmd, Player &player)
+size_t OnStandingAttackTile(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLoc *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1094,7 +1093,7 @@ DWORD OnStandingAttackTile(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnRangedAttackTile(const TCmd *pCmd, Player &player)
+size_t OnRangedAttackTile(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLoc *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1109,7 +1108,7 @@ DWORD OnRangedAttackTile(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnSpellWall(const TCmd *pCmd, Player &player)
+size_t OnSpellWall(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam4 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1126,6 +1125,10 @@ DWORD OnSpellWall(const TCmd *pCmd, Player &player)
 		return sizeof(message);
 
 	auto spell = static_cast<spell_id>(message.wParam1);
+	if (!IsValidSpell(spell)) {
+		LogError(_("{:s} has cast an invalid spell."), player._pName);
+		return sizeof(message);
+	}
 	if (leveltype == DTYPE_TOWN && !spelldata[spell].sTownSpell) {
 		LogError(_("{:s} has cast an illegal spell."), player._pName);
 		return sizeof(message);
@@ -1144,7 +1147,7 @@ DWORD OnSpellWall(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnSpellTile(const TCmd *pCmd, Player &player)
+size_t OnSpellTile(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam3 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1161,6 +1164,10 @@ DWORD OnSpellTile(const TCmd *pCmd, Player &player)
 		return sizeof(message);
 
 	auto spell = static_cast<spell_id>(message.wParam1);
+	if (!IsValidSpell(spell)) {
+		LogError(_("{:s} has cast an invalid spell."), player._pName);
+		return sizeof(message);
+	}
 	if (leveltype == DTYPE_TOWN && !spelldata[spell].sTownSpell) {
 		LogError(_("{:s} has cast an illegal spell."), player._pName);
 		return sizeof(message);
@@ -1177,7 +1184,7 @@ DWORD OnSpellTile(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnTargetSpellTile(const TCmd *pCmd, Player &player)
+size_t OnTargetSpellTile(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam2 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1209,7 +1216,7 @@ DWORD OnTargetSpellTile(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnOperateObjectTile(const TCmd *pCmd, Player &player)
+size_t OnOperateObjectTile(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam1 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1223,7 +1230,7 @@ DWORD OnOperateObjectTile(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnDisarm(const TCmd *pCmd, Player &player)
+size_t OnDisarm(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam1 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1237,7 +1244,7 @@ DWORD OnDisarm(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnOperateObjectTelekinesis(const TCmd *pCmd, Player &player)
+size_t OnOperateObjectTelekinesis(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1249,7 +1256,7 @@ DWORD OnOperateObjectTelekinesis(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnAttackMonster(const TCmd *pCmd, Player &player)
+size_t OnAttackMonster(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1264,7 +1271,7 @@ DWORD OnAttackMonster(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnAttackPlayer(const TCmd *pCmd, Player &player)
+size_t OnAttackPlayer(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1277,7 +1284,7 @@ DWORD OnAttackPlayer(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnRangedAttackMonster(const TCmd *pCmd, Player &player)
+size_t OnRangedAttackMonster(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1290,7 +1297,7 @@ DWORD OnRangedAttackMonster(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnRangedAttackPlayer(const TCmd *pCmd, Player &player)
+size_t OnRangedAttackPlayer(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1303,7 +1310,7 @@ DWORD OnRangedAttackPlayer(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnSpellMonster(const TCmd *pCmd, Player &player)
+size_t OnSpellMonster(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam4 *>(pCmd);
 
@@ -1319,6 +1326,10 @@ DWORD OnSpellMonster(const TCmd *pCmd, Player &player)
 		return sizeof(message);
 
 	auto spell = static_cast<spell_id>(message.wParam2);
+	if (!IsValidSpell(spell)) {
+		LogError(_("{:s} has cast an invalid spell."), player._pName);
+		return sizeof(message);
+	}
 	if (leveltype == DTYPE_TOWN && !spelldata[spell].sTownSpell) {
 		LogError(_("{:s} has cast an illegal spell."), player._pName);
 		return sizeof(message);
@@ -1335,7 +1346,7 @@ DWORD OnSpellMonster(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnSpellPlayer(const TCmd *pCmd, Player &player)
+size_t OnSpellPlayer(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam4 *>(pCmd);
 
@@ -1351,6 +1362,10 @@ DWORD OnSpellPlayer(const TCmd *pCmd, Player &player)
 		return sizeof(message);
 
 	auto spell = static_cast<spell_id>(message.wParam2);
+	if (!IsValidSpell(spell)) {
+		LogError(_("{:s} has cast an invalid spell."), player._pName);
+		return sizeof(message);
+	}
 	if (leveltype == DTYPE_TOWN && !spelldata[spell].sTownSpell) {
 		LogError(_("{:s} has cast an illegal spell."), player._pName);
 		return sizeof(message);
@@ -1367,7 +1382,7 @@ DWORD OnSpellPlayer(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnTargetSpellMonster(const TCmd *pCmd, Player &player)
+size_t OnTargetSpellMonster(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam3 *>(pCmd);
 
@@ -1399,7 +1414,7 @@ DWORD OnTargetSpellMonster(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnTargetSpellPlayer(const TCmd *pCmd, Player &player)
+size_t OnTargetSpellPlayer(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam3 *>(pCmd);
 
@@ -1429,7 +1444,7 @@ DWORD OnTargetSpellPlayer(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnKnockback(const TCmd *pCmd, int pnum)
+size_t OnKnockback(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1442,7 +1457,7 @@ DWORD OnKnockback(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnResurrect(const TCmd *pCmd, int pnum)
+size_t OnResurrect(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1456,7 +1471,7 @@ DWORD OnResurrect(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnHealOther(const TCmd *pCmd, const Player &caster)
+size_t OnHealOther(const TCmd *pCmd, const Player &caster)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1469,7 +1484,7 @@ DWORD OnHealOther(const TCmd *pCmd, const Player &caster)
 	return sizeof(message);
 }
 
-DWORD OnTalkXY(const TCmd *pCmd, Player &player)
+size_t OnTalkXY(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam1 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1483,7 +1498,7 @@ DWORD OnTalkXY(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnNewLevel(const TCmd *pCmd, int pnum)
+size_t OnNewLevel(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam2 *>(pCmd);
 
@@ -1506,7 +1521,7 @@ DWORD OnNewLevel(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnWarp(const TCmd *pCmd, int pnum)
+size_t OnWarp(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1519,41 +1534,47 @@ DWORD OnWarp(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnMonstDeath(const TCmd *pCmd, int pnum)
+size_t OnMonstDeath(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam1 *>(pCmd);
 	const Point position { message.x, message.y };
 
-	if (gbBufferMsgs == 1)
-		SendPacket(pnum, &message, sizeof(message));
-	else if (pnum != MyPlayerId && InDungeonBounds(position) && message.wParam1 < MaxMonsters) {
+	if (gbBufferMsgs != 1) {
 		Player &player = Players[pnum];
-		if (player.isOnActiveLevel())
-			M_SyncStartKill(message.wParam1, position, pnum);
-		delta_kill_monster(message.wParam1, position, player);
+		if (&player != MyPlayer && InDungeonBounds(position) && message.wParam1 < MaxMonsters) {
+			Monster &monster = Monsters[message.wParam1];
+			if (player.isOnActiveLevel())
+				M_SyncStartKill(message.wParam1, position, pnum);
+			delta_kill_monster(monster, position, player);
+		}
+	} else {
+		SendPacket(pnum, &message, sizeof(message));
 	}
 
 	return sizeof(message);
 }
 
-DWORD OnKillGolem(const TCmd *pCmd, int pnum)
+size_t OnKillGolem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdLoc *>(pCmd);
 	const Point position { message.x, message.y };
 
-	if (gbBufferMsgs == 1)
-		SendPacket(pnum, &message, sizeof(message));
-	else if (pnum != MyPlayerId && InDungeonBounds(position)) {
+	if (gbBufferMsgs != 1) {
 		Player &player = Players[pnum];
-		if (player.isOnActiveLevel())
-			M_SyncStartKill(pnum, position, pnum);
-		delta_kill_monster(pnum, position, player);
+		if (&player != MyPlayer && InDungeonBounds(position)) {
+			Monster &monster = Monsters[pnum];
+			if (player.isOnActiveLevel())
+				M_SyncStartKill(pnum, position, pnum);
+			delta_kill_monster(monster, position, player);
+		}
+	} else {
+		SendPacket(pnum, &message, sizeof(message));
 	}
 
 	return sizeof(message);
 }
 
-DWORD OnAwakeGolem(const TCmd *pCmd, int pnum)
+size_t OnAwakeGolem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdGolem *>(pCmd);
 	const Point position { message._mx, message._my };
@@ -1561,74 +1582,81 @@ DWORD OnAwakeGolem(const TCmd *pCmd, int pnum)
 	if (gbBufferMsgs == 1) {
 		SendPacket(pnum, &message, sizeof(message));
 	} else if (InDungeonBounds(position)) {
-		if (!Players[pnum].isOnActiveLevel()) {
+		Player &player = Players[pnum];
+		if (!player.isOnActiveLevel()) {
 			DeltaSyncGolem(message, pnum, message._currlevel);
-		} else if (pnum != MyPlayerId) {
+		} else if (&player != MyPlayer) {
 			// Check if this player already has an active golem
 			for (auto &missile : Missiles) {
-				if (missile._mitype == MIS_GOLEM && missile._misource == pnum) {
+				if (missile._mitype == MIS_GOLEM && &Players[missile._misource] == &player) {
 					return sizeof(message);
 				}
 			}
 
-			AddMissile(Players[pnum].position.tile, position, message._mdir, MIS_GOLEM, TARGET_MONSTERS, pnum, 0, 1);
+			AddMissile(player.position.tile, position, message._mdir, MIS_GOLEM, TARGET_MONSTERS, pnum, 0, 1);
 		}
 	}
 
 	return sizeof(message);
 }
 
-DWORD OnMonstDamage(const TCmd *pCmd, int pnum)
+size_t OnMonstDamage(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdMonDamage *>(pCmd);
 
-	if (gbBufferMsgs == 1) {
-		SendPacket(pnum, &message, sizeof(message));
-	} else if (pnum != MyPlayerId) {
+	if (gbBufferMsgs != 1) {
 		Player &player = Players[pnum];
-		if (player.isOnActiveLevel() && message.wMon < MaxMonsters) {
-			auto &monster = Monsters[message.wMon];
-			monster.whoHit |= 1 << pnum;
-			if (monster.hitPoints > 0) {
-				monster.hitPoints -= message.dwDam;
-				if ((monster.hitPoints >> 6) < 1)
-					monster.hitPoints = 1 << 6;
-				delta_monster_hp(monster, player);
+		if (&player != MyPlayer) {
+			if (player.isOnActiveLevel() && message.wMon < MaxMonsters) {
+				auto &monster = Monsters[message.wMon];
+				monster.whoHit |= 1 << pnum;
+				if (monster.hitPoints > 0) {
+					monster.hitPoints -= message.dwDam;
+					if ((monster.hitPoints >> 6) < 1)
+						monster.hitPoints = 1 << 6;
+					delta_monster_hp(monster, player);
+				}
 			}
 		}
+	} else {
+		SendPacket(pnum, &message, sizeof(message));
 	}
 
 	return sizeof(message);
 }
 
-DWORD OnPlayerDeath(const TCmd *pCmd, int pnum)
+size_t OnPlayerDeath(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
-	if (gbBufferMsgs == 1)
+	if (gbBufferMsgs != 1) {
+		Player &player = Players[pnum];
+		if (&player != MyPlayer)
+			StartPlayerKill(player, message.wParam1);
+		else
+			CheckUpdatePlayer(pnum);
+	} else {
 		SendPacket(pnum, &message, sizeof(message));
-	else if (pnum != MyPlayerId)
-		StartPlayerKill(pnum, message.wParam1);
-	else
-		CheckUpdatePlayer(pnum);
+	}
 
 	return sizeof(message);
 }
 
-DWORD OnPlayerDamage(const TCmd *pCmd, Player &player)
+size_t OnPlayerDamage(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdDamage *>(pCmd);
 
-	if (message.bPlr == MyPlayerId && leveltype != DTYPE_TOWN && gbBufferMsgs != 1) {
-		if (player.isOnActiveLevel() && message.dwDam <= 192000 && Players[message.bPlr]._pHitPoints >> 6 > 0) {
-			ApplyPlrDamage(message.bPlr, 0, 0, message.dwDam, 1);
+	Player &target = Players[message.bPlr];
+	if (&target == MyPlayer && leveltype != DTYPE_TOWN && gbBufferMsgs != 1) {
+		if (player.isOnActiveLevel() && message.dwDam <= 192000 && target._pHitPoints >> 6 > 0) {
+			ApplyPlrDamage(target, 0, 0, message.dwDam, 1);
 		}
 	}
 
 	return sizeof(message);
 }
 
-DWORD OnOpenDoor(const TCmd *pCmd, int pnum)
+size_t OnOpenDoor(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1644,7 +1672,7 @@ DWORD OnOpenDoor(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnCloseDoor(const TCmd *pCmd, int pnum)
+size_t OnCloseDoor(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1660,7 +1688,7 @@ DWORD OnCloseDoor(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnOperateObject(const TCmd *pCmd, int pnum)
+size_t OnOperateObject(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -1676,7 +1704,7 @@ DWORD OnOperateObject(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnPlayerOperateObject(const TCmd *pCmd, int pnum)
+size_t OnPlayerOperateObject(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam2 *>(pCmd);
 
@@ -1692,7 +1720,7 @@ DWORD OnPlayerOperateObject(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnBreakObject(const TCmd *pCmd, int pnum)
+size_t OnBreakObject(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam2 *>(pCmd);
 
@@ -1709,7 +1737,7 @@ DWORD OnBreakObject(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnChangePlayerItems(const TCmd *pCmd, int pnum)
+size_t OnChangePlayerItems(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdChItem *>(pCmd);
 	Player &player = Players[pnum];
@@ -1721,7 +1749,7 @@ DWORD OnChangePlayerItems(const TCmd *pCmd, int pnum)
 
 	if (gbBufferMsgs == 1) {
 		SendPacket(pnum, &message, sizeof(message));
-	} else if (pnum != MyPlayerId && message.wIndx <= IDI_LAST) {
+	} else if (&player != MyPlayer && message.wIndx <= IDI_LAST) {
 		CheckInvSwap(player, bodyLocation, message.wIndx, message.wCI, message.dwSeed, message.bId != 0, message.dwBuff);
 	}
 
@@ -1730,31 +1758,37 @@ DWORD OnChangePlayerItems(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnDeletePlayerItems(const TCmd *pCmd, int pnum)
+size_t OnDeletePlayerItems(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdDelItem *>(pCmd);
 
-	if (gbBufferMsgs == 1)
+	if (gbBufferMsgs != 1) {
+		Player &player = Players[pnum];
+		if (&player != MyPlayer && message.bLoc < NUM_INVLOC)
+			inv_update_rem_item(player, static_cast<inv_body_loc>(message.bLoc));
+	} else {
 		SendPacket(pnum, &message, sizeof(message));
-	else if (pnum != MyPlayerId && message.bLoc < NUM_INVLOC)
-		inv_update_rem_item(Players[pnum], static_cast<inv_body_loc>(message.bLoc));
+	}
 
 	return sizeof(message);
 }
 
-DWORD OnPlayerLevel(const TCmd *pCmd, int pnum)
+size_t OnPlayerLevel(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
-	if (gbBufferMsgs == 1)
+	if (gbBufferMsgs != 1) {
+		Player &player = Players[pnum];
+		if (message.wParam1 <= MaxCharacterLevel && &player != MyPlayer)
+			player._pLevel = static_cast<int8_t>(message.wParam1);
+	} else {
 		SendPacket(pnum, &message, sizeof(message));
-	else if (message.wParam1 <= MaxCharacterLevel && pnum != MyPlayerId)
-		Players[pnum]._pLevel = static_cast<int8_t>(message.wParam1);
+	}
 
 	return sizeof(message);
 }
 
-DWORD OnDropItem(const TCmd *pCmd, int pnum)
+size_t OnDropItem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdPItem *>(pCmd);
 
@@ -1767,7 +1801,7 @@ DWORD OnDropItem(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnSpawnItem(const TCmd *pCmd, int pnum)
+size_t OnSpawnItem(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdPItem *>(pCmd);
 
@@ -1776,7 +1810,7 @@ DWORD OnSpawnItem(const TCmd *pCmd, int pnum)
 	} else if (IsPItemValid(message)) {
 		Player &player = Players[pnum];
 		Point position = { message.x, message.y };
-		if (player.isOnActiveLevel() && pnum != MyPlayerId) {
+		if (player.isOnActiveLevel() && &player != MyPlayer) {
 			SyncDropItem(position, message.wIndx, message.wCI, message.dwSeed, message.bId, message.bDur, message.bMDur, message.bCh, message.bMCh, message.wValue, message.dwBuff, message.wToHit, message.wMaxDam, message.bMinStr, message.bMinMag, message.bMinDex, message.bAC);
 		}
 		PutItemRecord(message.dwSeed, message.wCI, message.wIndx);
@@ -1786,7 +1820,7 @@ DWORD OnSpawnItem(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnSendPlayerInfo(const TCmd *pCmd, int pnum)
+size_t OnSendPlayerInfo(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdPlrInfoHdr *>(pCmd);
 
@@ -1798,7 +1832,7 @@ DWORD OnSendPlayerInfo(const TCmd *pCmd, int pnum)
 	return message.wBytes + sizeof(message);
 }
 
-DWORD OnPlayerJoinLevel(const TCmd *pCmd, int pnum)
+size_t OnPlayerJoinLevel(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam2 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1824,7 +1858,7 @@ DWORD OnPlayerJoinLevel(const TCmd *pCmd, int pnum)
 		EventPlrMsg(fmt::format(fmt::runtime(_("Player '{:s}' (level {:d}) just joined the game")), player._pName, player._pLevel));
 	}
 
-	if (player.plractive && pnum != MyPlayerId) {
+	if (player.plractive && &player != MyPlayer) {
 		player.position.tile = position;
 		if (isSetLevel)
 			player.setLevel(static_cast<_setlevels>(playerLevel));
@@ -1843,14 +1877,14 @@ DWORD OnPlayerJoinLevel(const TCmd *pCmd, int pnum)
 				dFlags[player.position.tile.x][player.position.tile.y] |= DungeonFlag::DeadPlayer;
 			}
 
-			player._pvid = AddVision(player.position.tile, player._pLightRad, pnum == MyPlayerId);
+			player._pvid = AddVision(player.position.tile, player._pLightRad, &player == MyPlayer);
 		}
 	}
 
 	return sizeof(message);
 }
 
-DWORD OnActivatePortal(const TCmd *pCmd, int pnum)
+size_t OnActivatePortal(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdLocParam3 *>(pCmd);
 	const Point position { message.x, message.y };
@@ -1863,13 +1897,14 @@ DWORD OnActivatePortal(const TCmd *pCmd, int pnum)
 		auto dungeonType = static_cast<dungeon_type>(message.wParam2);
 
 		ActivatePortal(pnum, position, level, dungeonType, isSetLevel);
-		if (pnum != MyPlayerId) {
+		Player &player = Players[pnum];
+		if (&player != MyPlayer) {
 			if (leveltype == DTYPE_TOWN) {
 				AddInTownPortal(pnum);
-			} else if (Players[pnum].isOnActiveLevel()) {
+			} else if (player.isOnActiveLevel()) {
 				bool addPortal = true;
 				for (auto &missile : Missiles) {
-					if (missile._mitype == MIS_TOWN && missile._misource == pnum) {
+					if (missile._mitype == MIS_TOWN && &Players[missile._misource] == &player) {
 						addPortal = false;
 						break;
 					}
@@ -1887,7 +1922,7 @@ DWORD OnActivatePortal(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnDeactivatePortal(const TCmd *pCmd, int pnum)
+size_t OnDeactivatePortal(const TCmd *pCmd, int pnum)
 {
 	if (gbBufferMsgs == 1) {
 		SendPacket(pnum, pCmd, sizeof(*pCmd));
@@ -1901,7 +1936,7 @@ DWORD OnDeactivatePortal(const TCmd *pCmd, int pnum)
 	return sizeof(*pCmd);
 }
 
-DWORD OnRestartTown(const TCmd *pCmd, int pnum)
+size_t OnRestartTown(const TCmd *pCmd, int pnum)
 {
 	if (gbBufferMsgs == 1) {
 		SendPacket(pnum, pCmd, sizeof(*pCmd));
@@ -1916,55 +1951,67 @@ DWORD OnRestartTown(const TCmd *pCmd, int pnum)
 	return sizeof(*pCmd);
 }
 
-DWORD OnSetStrength(const TCmd *pCmd, int pnum)
+size_t OnSetStrength(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
-	if (gbBufferMsgs == 1)
+	if (gbBufferMsgs == 1) {
+		Player &player = Players[pnum];
+		if (message.wParam1 <= 750 && &player != MyPlayer)
+			SetPlrStr(player, message.wParam1);
+	} else {
 		SendPacket(pnum, &message, sizeof(message));
-	else if (message.wParam1 <= 750 && pnum != MyPlayerId)
-		SetPlrStr(Players[pnum], message.wParam1);
+	}
 
 	return sizeof(message);
 }
 
-DWORD OnSetDexterity(const TCmd *pCmd, int pnum)
+size_t OnSetDexterity(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
-	if (gbBufferMsgs == 1)
+	if (gbBufferMsgs != 1) {
+		Player &player = Players[pnum];
+		if (message.wParam1 <= 750 && &player != MyPlayer)
+			SetPlrDex(player, message.wParam1);
+	} else {
 		SendPacket(pnum, &message, sizeof(message));
-	else if (message.wParam1 <= 750 && pnum != MyPlayerId)
-		SetPlrDex(Players[pnum], message.wParam1);
+	}
 
 	return sizeof(message);
 }
 
-DWORD OnSetMagic(const TCmd *pCmd, int pnum)
+size_t OnSetMagic(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
-	if (gbBufferMsgs == 1)
+	if (gbBufferMsgs != 1) {
+		Player &player = Players[pnum];
+		if (message.wParam1 <= 750 && &player != MyPlayer)
+			SetPlrMag(player, message.wParam1);
+	} else {
 		SendPacket(pnum, &message, sizeof(message));
-	else if (message.wParam1 <= 750 && pnum != MyPlayerId)
-		SetPlrMag(Players[pnum], message.wParam1);
+	}
 
 	return sizeof(message);
 }
 
-DWORD OnSetVitality(const TCmd *pCmd, int pnum)
+size_t OnSetVitality(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
-	if (gbBufferMsgs == 1)
+	if (gbBufferMsgs != 1) {
+		Player &player = Players[pnum];
+		if (message.wParam1 <= 750 && &player != MyPlayer)
+			SetPlrVit(player, message.wParam1);
+	} else {
 		SendPacket(pnum, &message, sizeof(message));
-	else if (message.wParam1 <= 750 && pnum != MyPlayerId)
-		SetPlrVit(Players[pnum], message.wParam1);
+	}
 
 	return sizeof(message);
 }
 
-DWORD OnString(const TCmd *pCmd, Player &player)
+size_t OnString(const TCmd *pCmd, Player &player)
 {
 	auto *p = (TCmdString *)pCmd;
 
@@ -1975,14 +2022,14 @@ DWORD OnString(const TCmd *pCmd, Player &player)
 	return len + 2; // length of string + nul terminator + sizeof(p->bCmd)
 }
 
-DWORD OnFriendlyMode(const TCmd *pCmd, Player &player) // NOLINT(misc-unused-parameters)
+size_t OnFriendlyMode(const TCmd *pCmd, Player &player) // NOLINT(misc-unused-parameters)
 {
 	player.friendlyMode = !player.friendlyMode;
 	force_redraw = 255;
 	return sizeof(*pCmd);
 }
 
-DWORD OnSyncQuest(const TCmd *pCmd, int pnum)
+size_t OnSyncQuest(const TCmd *pCmd, int pnum)
 {
 	const auto &message = *reinterpret_cast<const TCmdQuest *>(pCmd);
 
@@ -1997,7 +2044,7 @@ DWORD OnSyncQuest(const TCmd *pCmd, int pnum)
 	return sizeof(message);
 }
 
-DWORD OnCheatExperience(const TCmd *pCmd, int pnum) // NOLINT(misc-unused-parameters)
+size_t OnCheatExperience(const TCmd *pCmd, int pnum) // NOLINT(misc-unused-parameters)
 {
 #ifdef _DEBUG
 	if (gbBufferMsgs == 1)
@@ -2013,7 +2060,7 @@ DWORD OnCheatExperience(const TCmd *pCmd, int pnum) // NOLINT(misc-unused-parame
 	return sizeof(*pCmd);
 }
 
-DWORD OnCheatSpellLevel(const TCmd *pCmd, int pnum) // NOLINT(misc-unused-parameters)
+size_t OnCheatSpellLevel(const TCmd *pCmd, int pnum) // NOLINT(misc-unused-parameters)
 {
 #ifdef _DEBUG
 	if (gbBufferMsgs == 1) {
@@ -2026,12 +2073,12 @@ DWORD OnCheatSpellLevel(const TCmd *pCmd, int pnum) // NOLINT(misc-unused-parame
 	return sizeof(*pCmd);
 }
 
-DWORD OnDebug(const TCmd *pCmd)
+size_t OnDebug(const TCmd *pCmd)
 {
 	return sizeof(*pCmd);
 }
 
-DWORD OnNova(const TCmd *pCmd, Player &player)
+size_t OnNova(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdLoc *>(pCmd);
 	const Point position { message.x, message.y };
@@ -2051,7 +2098,7 @@ DWORD OnNova(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnSetShield(const TCmd *pCmd, Player &player)
+size_t OnSetShield(const TCmd *pCmd, Player &player)
 {
 	if (gbBufferMsgs != 1)
 		player.pManaShield = true;
@@ -2059,7 +2106,7 @@ DWORD OnSetShield(const TCmd *pCmd, Player &player)
 	return sizeof(*pCmd);
 }
 
-DWORD OnRemoveShield(const TCmd *pCmd, Player &player)
+size_t OnRemoveShield(const TCmd *pCmd, Player &player)
 {
 	if (gbBufferMsgs != 1)
 		player.pManaShield = false;
@@ -2067,7 +2114,7 @@ DWORD OnRemoveShield(const TCmd *pCmd, Player &player)
 	return sizeof(*pCmd);
 }
 
-DWORD OnSetReflect(const TCmd *pCmd, Player &player)
+size_t OnSetReflect(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
 
@@ -2077,7 +2124,7 @@ DWORD OnSetReflect(const TCmd *pCmd, Player &player)
 	return sizeof(message);
 }
 
-DWORD OnNakrul(const TCmd *pCmd)
+size_t OnNakrul(const TCmd *pCmd)
 {
 	if (gbBufferMsgs != 1) {
 		if (currlevel == 24) {
@@ -2091,7 +2138,7 @@ DWORD OnNakrul(const TCmd *pCmd)
 	return sizeof(*pCmd);
 }
 
-DWORD OnOpenHive(const TCmd *pCmd, int pnum)
+size_t OnOpenHive(const TCmd *pCmd, int pnum)
 {
 	if (gbBufferMsgs != 1) {
 		AddMissile({ 0, 0 }, { 0, 0 }, Direction::South, MIS_HIVEEXP2, TARGET_MONSTERS, pnum, 0, 0);
@@ -2102,7 +2149,7 @@ DWORD OnOpenHive(const TCmd *pCmd, int pnum)
 	return sizeof(*pCmd);
 }
 
-DWORD OnOpenCrypt(const TCmd *pCmd)
+size_t OnOpenCrypt(const TCmd *pCmd)
 {
 	if (gbBufferMsgs != 1) {
 		TownOpenGrave();
@@ -2209,15 +2256,15 @@ void delta_init()
 	deltaload = false;
 }
 
-void delta_kill_monster(int mi, Point position, const Player &player)
+void delta_kill_monster(const Monster &monster, Point position, const Player &player)
 {
 	if (!gbIsMultiplayer)
 		return;
 
 	sgbDeltaChanged = true;
-	DMonsterStr *pD = &GetDeltaLevel(player).monster[mi];
+	DMonsterStr *pD = &GetDeltaLevel(player).monster[monster.getId()];
 	pD->position = position;
-	pD->_mdir = Monsters[mi].direction;
+	pD->_mdir = monster.direction;
 	pD->hitPoints = 0;
 }
 
@@ -2334,9 +2381,9 @@ void DeltaSaveLevel()
 	if (!gbIsMultiplayer)
 		return;
 
-	for (int i = 0; i < MAX_PLRS; i++) {
-		if (i != MyPlayerId)
-			ResetPlayerGFX(Players[i]);
+	for (Player &player : Players) {
+		if (&player != MyPlayer)
+			ResetPlayerGFX(player);
 	}
 	uint8_t localLevel;
 	if (setlevel) {
@@ -2398,7 +2445,7 @@ void DeltaLoadLevel()
 	uint8_t localLevel = GetLevelForMultiplayer(*MyPlayer);
 	DLevel &deltaLevel = GetDeltaLevel(localLevel);
 	if (leveltype != DTYPE_TOWN) {
-		for (int i = 0; i < MaxMonsters; i++) {
+		for (size_t i = 0; i < MaxMonsters; i++) {
 			if (deltaLevel.monster[i].position.x == 0xFF)
 				continue;
 
@@ -2417,14 +2464,14 @@ void DeltaLoadLevel()
 			if (deltaLevel.monster[i].hitPoints == 0) {
 				M_ClearSquares(monster);
 				if (monster.ai != AI_DIABLO) {
-					if (monster.uniqType == 0) {
-						AddCorpse(monster.position.tile, monster.type().corpseId, monster.direction);
-					} else {
+					if (monster.isUnique()) {
 						AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
+					} else {
+						AddCorpse(monster.position.tile, monster.type().corpseId, monster.direction);
 					}
 				}
 				monster.isInvalid = true;
-				M_UpdateLeader(i);
+				M_UpdateRelations(monster);
 			} else {
 				decode_enemy(monster, deltaLevel.monster[i]._menemy);
 				if (monster.position.tile != Point { 0, 0 } && monster.position.tile != GolemHoldingCell)
@@ -2908,7 +2955,7 @@ void delta_close_portal(int pnum)
 	sgbDeltaChanged = true;
 }
 
-uint32_t ParseCmd(int pnum, const TCmd *pCmd)
+size_t ParseCmd(int pnum, const TCmd *pCmd)
 {
 	sbLastCmd = pCmd->bCmd;
 	if (sgwPackPlrOffsetTbl[pnum] != 0 && sbLastCmd != CMD_ACK_PLRINFO && sbLastCmd != CMD_SEND_PLRINFO)

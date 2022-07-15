@@ -10,6 +10,10 @@
 #include "platform/ctr/display.hpp"
 #endif
 
+#ifdef NXDK
+#include <hal/video.h>
+#endif
+
 #include "DiabloUI/diabloui.h"
 #include "control.h"
 #include "controls/controller.h"
@@ -25,6 +29,7 @@
 #include "utils/log.hpp"
 #include "utils/sdl_geometry.h"
 #include "utils/sdl_wrap.h"
+#include "utils/str_cat.hpp"
 
 #ifdef USE_SDL1
 #ifndef SDL1_VIDEO_MODE_BPP
@@ -98,7 +103,7 @@ void CalculatePreferredWindowSize(int &width, int &height)
 
 void FreeRenderer()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(NXDK)
 	bool wasD3D9 = false;
 	bool wasD3D11 = false;
 	if (renderer != nullptr) {
@@ -114,7 +119,7 @@ void FreeRenderer()
 		renderer = nullptr;
 	}
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(NXDK)
 	// On Windows 11 the directx9 VSYNC timer doesn't get recreated properly, see https://github.com/libsdl-org/SDL/issues/5099
 	// Furthermore, the direct3d11 driver "poisons" the window so it can't be used by another renderer
 	if ((wasD3D9 && *sgOptions.Graphics.upscale && *sgOptions.Graphics.vSync) || (wasD3D11 && !*sgOptions.Graphics.upscale)) {
@@ -147,14 +152,6 @@ void CalculateUIRectangle()
 	};
 }
 
-void AdjustToScreenGeometry(Size windowSize)
-{
-	gnScreenWidth = windowSize.width;
-	gnScreenHeight = windowSize.height;
-	CalculateUIRectangle();
-	CalculatePanelAreas();
-}
-
 Size GetPreferredWindowSize()
 {
 	Size windowSize = *sgOptions.Graphics.resolution;
@@ -169,6 +166,14 @@ Size GetPreferredWindowSize()
 }
 
 } // namespace
+
+void AdjustToScreenGeometry(Size windowSize)
+{
+	gnScreenWidth = windowSize.width;
+	gnScreenHeight = windowSize.height;
+	CalculateUIRectangle();
+	CalculatePanelAreas();
+}
 
 float GetDpiScalingFactor()
 {
@@ -234,6 +239,18 @@ bool SpawnWindow(const char *lpWindowName)
 {
 #ifdef __vita__
 	scePowerSetArmClockFrequency(444);
+#endif
+#ifdef NXDK
+	{
+		Size windowSize = *sgOptions.Graphics.resolution;
+		VIDEO_MODE xmode;
+		void *p = nullptr;
+		while (XVideoListModes(&xmode, 0, 0, &p)) {
+			if (windowSize.width >= xmode.width && windowSize.height == xmode.height)
+				break;
+		}
+		XVideoSetMode(xmode.width, xmode.height, xmode.bpp, xmode.refresh);
+	}
 #endif
 
 #if SDL_VERSION_ATLEAST(2, 0, 6) && defined(__vita__)
@@ -334,7 +351,7 @@ void ReinitializeTexture()
 	if (renderer == nullptr)
 		return;
 
-	auto quality = fmt::format("{}", static_cast<int>(*sgOptions.Graphics.scaleQuality));
+	auto quality = StrCat(static_cast<int>(*sgOptions.Graphics.scaleQuality));
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, quality.c_str());
 
 	texture = SDLWrap::CreateTexture(renderer, SDL_PIXELFORMAT_RGB888, SDL_TEXTUREACCESS_STREAMING, gnScreenWidth, gnScreenHeight);

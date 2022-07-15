@@ -11,10 +11,12 @@
 #include "appfat.h"
 #include "encrypt.h"
 #include "engine.h"
+#include "miniwin/miniwin.h"
 #include "utils/endian.hpp"
 #include "utils/file_util.h"
 #include "utils/language.h"
 #include "utils/log.hpp"
+#include "utils/str_cat.hpp"
 
 namespace devilution {
 
@@ -336,7 +338,7 @@ MpqBlockEntry *MpqWriter::AddFile(const char *filename, MpqBlockEntry *block, ui
 	uint32_t h2 = Hash(filename, 1);
 	uint32_t h3 = Hash(filename, 2);
 	if (GetHashIndex(h1, h2, h3) != HashEntryNotFound)
-		app_fatal(fmt::format("Hash collision between \"{}\" and existing file\n", filename));
+		app_fatal(StrCat("Hash collision between \"", filename, "\" and existing file\n"));
 	unsigned int hIdx = h1 & 0x7FF;
 
 	bool hasSpace = false;

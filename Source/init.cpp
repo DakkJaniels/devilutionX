@@ -8,13 +8,14 @@
 #include <string>
 #include <vector>
 
-#if (defined(_WIN64) || defined(_WIN32)) && !defined(__UWP__)
+#if (defined(_WIN64) || defined(_WIN32)) && !defined(__UWP__) && !defined(NXDK)
 #include <find_steam_game.h>
 #endif
 
 #include "DiabloUI/diabloui.h"
 #include "engine/assets.hpp"
 #include "engine/dx.h"
+#include "miniwin/misc_msg.h"
 #include "mpq/mpq_reader.hpp"
 #include "options.h"
 #include "pfile.h"
@@ -36,7 +37,7 @@ bool gbActive;
 /** A handle to an hellfire.mpq archive. */
 std::optional<MpqArchive> hellfire_mpq;
 /** The current input handler function */
-WNDPROC CurrentProc;
+EventHandler CurrentEventHandler;
 /** A handle to the spawn.mpq archive. */
 std::optional<MpqArchive> spawn_mpq;
 /** A handle to the diabdat.mpq archive. */
@@ -95,7 +96,9 @@ std::vector<std::string> GetMPQSearchPaths()
 	paths.emplace_back("/usr/local/share/diasurgical/devilutionx/");
 #elif defined(__3DS__) || defined(__SWITCH__)
 	paths.emplace_back("romfs:/");
-#elif (defined(_WIN64) || defined(_WIN32)) && !defined(__UWP__)
+#elif defined(NXDK)
+	paths.emplace_back("D:\\");
+#elif (defined(_WIN64) || defined(_WIN32)) && !defined(__UWP__) && !defined(NXDK)
 	char gogpath[_FSG_PATH_MAX];
 	fsg_get_gog_game_path(gogpath, "1412601690");
 	if (strlen(gogpath) > 0) {
@@ -184,12 +187,14 @@ void LoadGameArchives()
 		if (spawn_mpq)
 			gbIsSpawn = true;
 	}
-	SDL_RWops *handle = OpenAsset("ui_art\\title.pcx");
-	if (handle == nullptr) {
-		LogError("{}", SDL_GetError());
-		InsertCDDlg(_("diabdat.mpq or spawn.mpq"));
+	if (!HeadlessMode) {
+		SDL_RWops *handle = OpenAsset("ui_art\\title.pcx");
+		if (handle == nullptr) {
+			LogError("{}", SDL_GetError());
+			InsertCDDlg(_("diabdat.mpq or spawn.mpq"));
+		}
+		SDL_RWclose(handle);
 	}
-	SDL_RWclose(handle);
 
 	hellfire_mpq = LoadMPQ(paths, "hellfire.mpq");
 	if (hellfire_mpq)
@@ -235,13 +240,11 @@ void MainWndProc(uint32_t msg)
 	}
 }
 
-WNDPROC SetWindowProc(WNDPROC newProc)
+EventHandler SetEventHandler(EventHandler eventHandler)
 {
-	WNDPROC oldProc;
-
-	oldProc = CurrentProc;
-	CurrentProc = newProc;
-	return oldProc;
+	EventHandler previousHandler = CurrentEventHandler;
+	CurrentEventHandler = eventHandler;
+	return previousHandler;
 }
 
 } // namespace devilution

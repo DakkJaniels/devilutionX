@@ -11,6 +11,7 @@
 #include "automap.h"
 #include "control.h"
 #include "controls/controller_motion.h"
+#include "miniwin/misc_msg.h"
 #ifndef USE_SDL1
 #include "controls/devices/game_controller.h"
 #endif
@@ -36,6 +37,7 @@
 #include "towners.h"
 #include "track.h"
 #include "utils/log.hpp"
+#include "utils/str_cat.hpp"
 
 #define SPLICONLENGTH 56
 
@@ -248,7 +250,7 @@ void FindRangedTarget()
 	int distance = 0;
 	bool canTalk = false;
 
-	for (int i = 0; i < ActiveMonsterCount; i++) {
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
 		int mi = ActiveMonsters[i];
 		const auto &monster = Monsters[mi];
 
@@ -369,9 +371,9 @@ void CheckPlayerNearby()
 		return;
 
 	for (int i = 0; i < MAX_PLRS; i++) {
-		if (i == MyPlayerId)
-			continue;
 		const Player &player = Players[i];
+		if (&player == MyPlayer)
+			continue;
 		const int mx = player.position.future.x;
 		const int my = player.position.future.y;
 		if (dPlayer[mx][my] == 0
@@ -1469,7 +1471,7 @@ void LogControlDeviceAndModeChange(ControlTypes newControlDevice, ControlTypes n
 	constexpr auto DebugChange = [](ControlTypes before, ControlTypes after) -> std::string {
 		if (before == after)
 			return std::string { ControlTypeToString(before) };
-		return fmt::format("{} -> {}", ControlTypeToString(before), ControlTypeToString(after));
+		return StrCat(ControlTypeToString(before), " -> ", ControlTypeToString(after));
 	};
 	LogVerbose("Control: device {}, mode {}", DebugChange(ControlDevice, newControlDevice), DebugChange(ControlMode, newControlMode));
 }
@@ -1989,6 +1991,7 @@ void PerformSecondaryAction()
 
 void QuickCast(size_t slot)
 {
+	MouseActionType prevMouseButtonAction = LastMouseButtonAction;
 	Player &myPlayer = *MyPlayer;
 	spell_id spell = myPlayer._pSplHotKey[slot];
 	spell_type spellType = myPlayer._pSplTHotKey[slot];
@@ -1998,12 +2001,7 @@ void QuickCast(size_t slot)
 	}
 
 	CheckPlrSpell(false, spell, spellType);
-	if (pcursplr != -1)
-		LastMouseButtonAction = MouseActionType::SpellPlayerTarget;
-	else if (pcursmonst != -1)
-		LastMouseButtonAction = MouseActionType::SpellMonsterTarget;
-	else
-		LastMouseButtonAction = MouseActionType::Spell;
+	LastMouseButtonAction = prevMouseButtonAction;
 }
 
 } // namespace devilution

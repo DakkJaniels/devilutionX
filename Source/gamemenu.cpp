@@ -101,8 +101,10 @@ void GamemenuNewGame(bool /*bActivate*/)
 	}
 
 	MyPlayerIsDead = false;
-	force_redraw = 255;
-	scrollrt_draw_game_screen();
+	if (!HeadlessMode) {
+		force_redraw = 255;
+		scrollrt_draw_game_screen();
+	}
 	CornerStone.activated = false;
 	gbRunGame = false;
 	gamemenu_off();
@@ -287,7 +289,7 @@ void gamemenu_quit_game(bool bActivate)
 
 void gamemenu_load_game(bool /*bActivate*/)
 {
-	WNDPROC saveProc = SetWindowProc(DisableInputWndProc);
+	EventHandler saveProc = SetEventHandler(DisableInputEventHandler);
 	gamemenu_off();
 	NewCursor(CURSOR_NONE);
 	InitDiabloMsg(EMSG_LOADING);
@@ -304,7 +306,7 @@ void gamemenu_load_game(bool /*bActivate*/)
 	PaletteFadeIn(8);
 	NewCursor(CURSOR_HAND);
 	interface_msg_pump();
-	SetWindowProc(saveProc);
+	SetEventHandler(saveProc);
 }
 
 void gamemenu_save_game(bool /*bActivate*/)
@@ -318,7 +320,7 @@ void gamemenu_save_game(bool /*bActivate*/)
 		return;
 	}
 
-	WNDPROC saveProc = SetWindowProc(DisableInputWndProc);
+	EventHandler saveProc = SetEventHandler(DisableInputEventHandler);
 	NewCursor(CURSOR_NONE);
 	gamemenu_off();
 	InitDiabloMsg(EMSG_SAVING);
@@ -333,7 +335,7 @@ void gamemenu_save_game(bool /*bActivate*/)
 		SaveOptions();
 	}
 	interface_msg_pump();
-	SetWindowProc(saveProc);
+	SetEventHandler(saveProc);
 }
 
 void gamemenu_on()

@@ -28,6 +28,7 @@
 #include "utils/log.hpp"
 #include "utils/paths.h"
 #include "utils/stdcompat/algorithm.hpp"
+#include "utils/str_cat.hpp"
 #include "utils/utf8.hpp"
 
 namespace devilution {
@@ -515,7 +516,7 @@ string_view OptionEntryIntBase::GetListDescription(size_t index) const
 {
 	if (entryNames.empty()) {
 		for (auto value : entryValues) {
-			entryNames.push_back(fmt::format("{}", value));
+			entryNames.push_back(StrCat(value));
 		}
 	}
 	return entryNames[index].data();
@@ -533,12 +534,6 @@ void OptionEntryIntBase::SetActiveListIndex(size_t index)
 	this->NotifyValueChanged();
 }
 
-OptionCategoryBase::OptionCategoryBase(string_view key, string_view name, string_view description)
-    : key(key)
-    , name(name)
-    , description(description)
-{
-}
 string_view OptionCategoryBase::GetKey() const
 {
 	return key;
@@ -730,7 +725,7 @@ void OptionEntryResolution::CheckResolutionsAreInitialized() const
 	sizes.erase(std::unique(sizes.begin(), sizes.end()), sizes.end());
 
 	for (auto &size : sizes) {
-		resolutions.emplace_back(size, fmt::format("{}x{}", size.width, size.height));
+		resolutions.emplace_back(size, StrCat(size.width, "x", size.height));
 	}
 }
 
@@ -894,7 +889,13 @@ GraphicsOptions::GraphicsOptions()
     , fitToScreen("Fit to Screen", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::RecreateUI, N_("Fit to Screen"), N_("Automatically adjust the game window to your current desktop screen aspect ratio and resolution."), true)
 #endif
 #ifndef USE_SDL1
-    , upscale("Upscale", OnlyIfNoImplicitRenderer | OptionEntryFlags::CantChangeInGame | OptionEntryFlags::RecreateUI, N_("Upscale"), N_("Enables image scaling from the game resolution to your monitor resolution. Prevents changing the monitor resolution and allows window resizing."), true)
+    , upscale("Upscale", OnlyIfNoImplicitRenderer | OptionEntryFlags::CantChangeInGame | OptionEntryFlags::RecreateUI, N_("Upscale"), N_("Enables image scaling from the game resolution to your monitor resolution. Prevents changing the monitor resolution and allows window resizing."),
+#ifdef NXDK
+          false
+#else
+          true
+#endif
+          )
     , scaleQuality("Scaling Quality", OptionEntryFlags::None, N_("Scaling Quality"), N_("Enables optional filters to the output image when upscaling."), ScalingQuality::AnisotropicFiltering,
           {
               { ScalingQuality::NearestPixel, N_("Nearest Pixel") },
@@ -902,9 +903,23 @@ GraphicsOptions::GraphicsOptions()
               { ScalingQuality::AnisotropicFiltering, N_("Anisotropic") },
           })
     , integerScaling("Integer Scaling", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::RecreateUI, N_("Integer Scaling"), N_("Scales the image using whole number pixel ratio."), false)
-    , vSync("Vertical Sync", OptionEntryFlags::RecreateUI, N_("Vertical Sync"), N_("Forces waiting for Vertical Sync. Prevents tearing effect when drawing a frame. Disabling it can help with mouse lag on some systems."), true)
+    , vSync("Vertical Sync",
+          OptionEntryFlags::RecreateUI
+#ifdef NXDK
+              | OptionEntryFlags::Invisible
+#endif
+          ,
+          N_("Vertical Sync"),
+          N_("Forces waiting for Vertical Sync. Prevents tearing effect when drawing a frame. Disabling it can help with mouse lag on some systems."),
+#ifdef NXDK
+          false
+#else
+          true
+#endif
+          )
 #endif
     , gammaCorrection("Gamma Correction", OptionEntryFlags::Invisible, "Gamma Correction", "Gamma correction level.", 100)
+    , zoom("Zoom", OptionEntryFlags::None, N_("Zoom"), N_("Zoom on when enabled."), false)
     , colorCycling("Color Cycling", OptionEntryFlags::None, N_("Color Cycling"), N_("Color cycling effect used for water, lava, and acid animation."), true)
     , alternateNestArt("Alternate nest art", OptionEntryFlags::OnlyHellfire | OptionEntryFlags::CantChangeInGame, N_("Alternate nest art"), N_("The game will use an alternative palette for Hellfire’s nest tileset."), false)
 #if SDL_VERSION_ATLEAST(2, 0, 0)
@@ -948,6 +963,7 @@ std::vector<OptionEntryBase *> GraphicsOptions::GetEntries()
 		&vSync,
 #endif
 		&gammaCorrection,
+		&zoom,
 		&limitFPS,
 		&showFPS,
 		&showHealthValues,
@@ -1208,7 +1224,7 @@ KeymapperOptions::KeymapperOptions()
 		keyIDToKeyName.emplace(c, std::string(1, c));
 	}
 	for (int i = 0; i < 12; ++i) {
-		keyIDToKeyName.emplace(DVL_VK_F1 + i, fmt::format("F{}", i + 1));
+		keyIDToKeyName.emplace(DVL_VK_F1 + i, StrCat("F", i + 1));
 	}
 
 	keyIDToKeyName.emplace(DVL_VK_LMENU, "LALT");
@@ -1238,7 +1254,7 @@ std::vector<OptionEntryBase *> KeymapperOptions::GetEntries()
 	return entries;
 }
 
-KeymapperOptions::Action::Action(string_view key, string_view name, string_view description, int defaultKey, std::function<void()> actionPressed, std::function<void()> actionReleased, std::function<bool()> enable, unsigned index)
+KeymapperOptions::Action::Action(string_view key, const char *name, const char *description, int defaultKey, std::function<void()> actionPressed, std::function<void()> actionReleased, std::function<bool()> enable, unsigned index)
     : OptionEntryBase(key, OptionEntryFlags::None, name, description)
     , defaultKey(defaultKey)
     , actionPressed(std::move(actionPressed))
@@ -1340,7 +1356,7 @@ bool KeymapperOptions::Action::SetValue(int value)
 	return true;
 }
 
-void KeymapperOptions::AddAction(string_view key, string_view name, string_view description, int defaultKey, std::function<void()> actionPressed, std::function<void()> actionReleased, std::function<bool()> enable, unsigned index)
+void KeymapperOptions::AddAction(string_view key, const char *name, const char *description, int defaultKey, std::function<void()> actionPressed, std::function<void()> actionReleased, std::function<bool()> enable, unsigned index)
 {
 	actions.push_back(std::unique_ptr<Action>(new Action(key, name, description, defaultKey, std::move(actionPressed), std::move(actionReleased), std::move(enable), index)));
 }

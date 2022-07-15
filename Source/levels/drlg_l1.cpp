@@ -1,13 +1,10 @@
-/**
- * @file levels/drlg_l1.cpp
- *
- * Implementation of the cathedral level generation algorithms.
- */
 #include "levels/drlg_l1.h"
 
 #include "engine/load_file.hpp"
 #include "engine/point.hpp"
 #include "engine/random.hpp"
+#include "engine/rectangle.hpp"
+#include "levels/crypt.h"
 #include "levels/gendung.h"
 #include "player.h"
 #include "quests.h"
@@ -15,16 +12,8 @@
 
 namespace devilution {
 
-int UberRow;
-int UberCol;
-bool IsUberRoomOpened;
-bool IsUberLeverActivated;
-int UberDiabloMonsterIndex;
-
 namespace {
 
-/** Represents a tile ID map of twice the size, repeating each tile of the original map in blocks of 4. */
-BYTE L5dungeon[80][80];
 /** Marks where walls may not be added to the level */
 Bitset2d<DMAXX, DMAXY> Chamber;
 /** Specifies whether to generate a horizontal or vertical layout. */
@@ -36,101 +25,6 @@ bool HasChamber2;
 /** Specifies whether to generate a room at position 3 in the Cathedral. */
 bool HasChamber3;
 
-/** Contains shadows for 2x2 blocks of base tile IDs in the Cathedral. */
-const ShadowStruct SPATS[37] = {
-	// clang-format off
-	// strig, s1, s2, s3, nv1, nv2, nv3
-	{      7, 13,  0, 13, 144,   0, 142 },
-	{     16, 13,  0, 13, 144,   0, 142 },
-	{     15, 13,  0, 13, 145,   0, 142 },
-	{      5, 13, 13, 13, 152, 140, 139 },
-	{      5, 13,  1, 13, 143, 146, 139 },
-	{      5, 13, 13,  2, 143, 140, 148 },
-	{      5,  0,  1,  2,   0, 146, 148 },
-	{      5, 13, 11, 13, 143, 147, 139 },
-	{      5, 13, 13, 12, 143, 140, 149 },
-	{      5, 13, 11, 12, 150, 147, 149 },
-	{      5, 13,  1, 12, 143, 146, 149 },
-	{      5, 13, 11,  2, 143, 147, 148 },
-	{      9, 13, 13, 13, 144, 140, 142 },
-	{      9, 13,  1, 13, 144, 146, 142 },
-	{      9, 13, 11, 13, 151, 147, 142 },
-	{      8, 13,  0, 13, 144,   0, 139 },
-	{      8, 13,  0, 12, 143,   0, 149 },
-	{      8,  0,  0,  2,   0,   0, 148 },
-	{     11,  0,  0, 13,   0,   0, 139 },
-	{     11, 13,  0, 13, 139,   0, 139 },
-	{     11,  2,  0, 13, 148,   0, 139 },
-	{     11, 12,  0, 13, 149,   0, 139 },
-	{     11, 13, 11, 12, 139,   0, 149 },
-	{     14,  0,  0, 13,   0,   0, 139 },
-	{     14, 13,  0, 13, 139,   0, 139 },
-	{     14,  2,  0, 13, 148,   0, 139 },
-	{     14, 12,  0, 13, 149,   0, 139 },
-	{     14, 13, 11, 12, 139,   0, 149 },
-	{     10,  0, 13,  0,   0, 140,   0 },
-	{     10, 13, 13,  0, 140, 140,   0 },
-	{     10,  0,  1,  0,   0, 146,   0 },
-	{     10, 13, 11,  0, 140, 147,   0 },
-	{     12,  0, 13,  0,   0, 140,   0 },
-	{     12, 13, 13,  0, 140, 140,   0 },
-	{     12,  0,  1,  0,   0, 146,   0 },
-	{     12, 13, 11,  0, 140, 147,   0 },
-	{      3, 13, 11, 12, 150,   0,   0 }
-	// clang-format on
-};
-
-// BUGFIX: This array should contain an additional 0 (207 elements).
-/** Maps tile IDs to their corresponding base tile ID. */
-const BYTE BSTYPES[] = {
-	0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-	10, 11, 12, 13, 14, 15, 16, 17, 0, 0,
-	0, 0, 0, 0, 0, 1, 2, 10, 4, 5,
-	6, 7, 8, 9, 10, 11, 12, 14, 5, 14,
-	10, 4, 14, 4, 5, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-	2, 3, 4, 1, 6, 7, 16, 17, 2, 1,
-	1, 2, 2, 1, 1, 2, 2, 2, 2, 2,
-	1, 1, 11, 1, 13, 13, 13, 1, 2, 1,
-	2, 1, 2, 1, 2, 2, 2, 2, 12, 0,
-	0, 11, 1, 11, 1, 13, 0, 0, 0, 0,
-	0, 0, 0, 13, 13, 13, 13, 13, 13, 13,
-	13, 13, 13, 13, 13, 13, 1, 11, 2, 12,
-	13, 13, 13, 12, 2, 1, 2, 2, 4, 14,
-	4, 10, 13, 13, 4, 4, 1, 1, 4, 2,
-	2, 13, 13, 13, 13, 25, 26, 28, 30, 31,
-	41, 43, 40, 41, 42, 43, 25, 41, 43, 28,
-	28, 1, 2, 25, 26, 22, 22, 25, 26, 0,
-	0, 0, 0, 0, 0, 0, 0
-};
-
-// BUGFIX: This array should contain an additional 0 (207 elements) (fixed).
-/** Maps tile IDs to their corresponding undecorated tile ID. */
-const BYTE L5BTYPES[] = {
-	0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-	10, 11, 12, 13, 14, 15, 16, 17, 0, 0,
-	0, 0, 0, 0, 0, 25, 26, 0, 28, 0,
-	30, 31, 0, 0, 0, 0, 0, 0, 0, 0,
-	40, 41, 42, 43, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 79,
-	80, 0, 82, 0, 0, 0, 0, 0, 0, 79,
-	0, 80, 0, 0, 79, 80, 0, 2, 2, 2,
-	1, 1, 11, 25, 13, 13, 13, 1, 2, 1,
-	2, 1, 2, 1, 2, 2, 2, 2, 12, 0,
-	0, 11, 1, 11, 1, 13, 0, 0, 0, 0,
-	0, 0, 0, 13, 13, 13, 13, 13, 13, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0
-};
 /** Miniset: stairs up on a corner wall. */
 const Miniset STAIRSUP {
 	{ 4, 4 },
@@ -147,39 +41,6 @@ const Miniset STAIRSUP {
 	    { 0, 0, 0, 0 },
 	}
 };
-const Miniset L5STAIRSUPHF {
-	{ 4, 5 },
-	{
-	    { 22, 22, 22, 22 },
-	    { 22, 22, 22, 22 },
-	    { 2, 2, 2, 2 },
-	    { 13, 13, 13, 13 },
-	    { 13, 13, 13, 13 },
-	},
-	{
-	    { 0, 54, 23, 0 },
-	    { 0, 53, 18, 0 },
-	    { 55, 56, 57, 0 },
-	    { 58, 59, 60, 0 },
-	    { 0, 0, 0, 0 },
-	}
-};
-/** Miniset: stairs up. */
-const Miniset L5STAIRSUP {
-	{ 4, 4 },
-	{
-	    { 22, 22, 22, 22 },
-	    { 2, 2, 2, 2 },
-	    { 13, 13, 13, 13 },
-	    { 13, 13, 13, 13 },
-	},
-	{
-	    { 0, 66, 23, 0 },
-	    { 63, 64, 65, 0 },
-	    { 0, 67, 68, 0 },
-	    { 0, 0, 0, 0 },
-	}
-};
 /** Miniset: stairs down. */
 const Miniset STAIRSDOWN {
 	{ 4, 3 },
@@ -191,40 +52,6 @@ const Miniset STAIRSDOWN {
 	{
 	    { 62, 57, 58, 0 },
 	    { 61, 59, 60, 0 },
-	    { 0, 0, 0, 0 },
-	}
-};
-const Miniset L5STAIRSDOWN {
-	{ 4, 5 },
-	{
-	    { 13, 13, 13, 13 },
-	    { 13, 13, 13, 13 },
-	    { 13, 13, 13, 13 },
-	    { 13, 13, 13, 13 },
-	    { 13, 13, 13, 13 },
-	},
-	{
-	    { 0, 0, 52, 0 },
-	    { 0, 48, 51, 0 },
-	    { 0, 47, 50, 0 },
-	    { 45, 46, 49, 0 },
-	    { 0, 0, 0, 0 },
-	}
-};
-const Miniset L5STAIRSTOWN {
-	{ 4, 5 },
-	{
-	    { 22, 22, 22, 22 },
-	    { 22, 22, 22, 22 },
-	    { 2, 2, 2, 2 },
-	    { 13, 13, 13, 13 },
-	    { 13, 13, 13, 13 },
-	},
-	{
-	    { 0, 62, 23, 0 },
-	    { 0, 61, 18, 0 },
-	    { 63, 64, 65, 0 },
-	    { 66, 67, 68, 0 },
 	    { 0, 0, 0, 0 },
 	}
 };
@@ -260,466 +87,215 @@ const Miniset PWATERIN {
 	    { 0, 0, 0, 0, 0, 0 },
 	}
 };
-const Miniset VWallSection {
-	{ 1, 3 },
-	{
-	    { 1 },
-	    { 1 },
-	    { 1 },
-	},
-	{
-	    { 91 },
-	    { 90 },
-	    { 89 },
-	}
-};
-const Miniset HWallSection {
-	{ 3, 1 },
-	{ { 2, 2, 2 } },
-	{ { 94, 93, 92 } }
-};
-const Miniset CryptFloorLave {
-	{ 3, 3 },
-	{
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	},
-	{
-	    { 0, 0, 0 },
-	    { 0, 101, 0 },
-	    { 0, 0, 0 },
-	}
-};
-const Miniset CryptPillar1 {
-	{ 3, 3 },
-	{
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	},
-	{
-	    { 0, 0, 0 },
-	    { 0, 167, 0 },
-	    { 0, 0, 0 },
-	}
-};
-const Miniset CryptPillar2 {
-	{ 3, 3 },
-	{
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	},
-	{
-	    { 0, 0, 0 },
-	    { 0, 168, 0 },
-	    { 0, 0, 0 },
-	}
-};
-const Miniset CryptPillar3 {
-	{ 3, 3 },
-	{
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	},
-	{
-	    { 0, 0, 0 },
-	    { 0, 169, 0 },
-	    { 0, 0, 0 },
-	}
-};
-const Miniset CryptPillar4 {
-	{ 3, 3 },
-	{
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	},
-	{
-	    { 0, 0, 0 },
-	    { 0, 170, 0 },
-	    { 0, 0, 0 },
-	}
-};
-const Miniset CryptPillar5 {
-	{ 3, 3 },
-	{
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	},
-	{
-	    { 0, 0, 0 },
-	    { 0, 171, 0 },
-	    { 0, 0, 0 },
-	}
-};
-const Miniset CryptStar {
-	{ 3, 3 },
-	{
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	    { 13, 13, 13 },
-	},
-	{
-	    { 0, 0, 0 },
-	    { 0, 172, 0 },
-	    { 0, 0, 0 },
-	}
-};
-
-const Miniset UberRoomPattern {
-	{ 4, 6 },
-	{},
-	{
-	    { 115, 130, 6, 13 },
-	    { 129, 108, 1, 13 },
-	    { 1, 107, 103, 13 },
-	    { 146, 106, 102, 13 },
-	    { 129, 168, 1, 13 },
-	    { 7, 2, 3, 13 },
-	}
-};
-const Miniset CornerstoneRoomPattern {
-	{ 5, 5 },
-	{},
-	{
-	    { 4, 2, 2, 2, 6 },
-	    { 1, 111, 172, 13, 1 },
-	    { 1, 172, 13, 13, 25 },
-	    { 1, 13, 13, 13, 1 },
-	    { 7, 2, 2, 2, 3 },
-	}
-};
-/**
- * A lookup table for the 16 possible patterns of a 2x2 area,
- * where each cell either contains a SW wall or it doesn't.
- */
-BYTE L5ConvTbl[16] = { 22, 13, 1, 13, 2, 13, 13, 13, 4, 13, 1, 13, 2, 13, 16, 13 };
 
 enum Tile : uint8_t {
 	// clang-format off
-	VWall          =  1,
-	HWall          =  2,
-	Corner         =  3,
-	DWall          =  4,
-	DArch          =  5,
-	VWallEnd       =  6,
-	HWallEnd       =  7,
-	HArchEnd       =  8,
-	VArchEnd       =  9,
-	HArchVWall     = 10,
-	VArch          = 11,
-	HArch          = 12,
-	Floor          = 13,
-	HWallVArch     = 14,
-	Pillar         = 15,
-	Pillar1        = 16,
-	Pillar2        = 17,
-	DirtCorner     = 21,
-	VDoor          = 25,
-	HDoor          = 26,
-	HFenceVWall    = 27,
-	HDoorVDoor     = 28,
-	DFence         = 29,
-	VDoorEnd       = 30,
-	HDoorEnd       = 31,
-	VFenceEnd      = 32,
-	VFence         = 35,
-	HFence         = 36,
-	HWallVFence    = 37,
-	HArchVFence    = 38,
-	HArchVDoor     = 39,
-	EntranceStairs = 64,
+	VWall          =   1,
+	HWall          =   2,
+	Corner         =   3,
+	DWall          =   4,
+	DArch          =   5,
+	VWallEnd       =   6,
+	HWallEnd       =   7,
+	HArchEnd       =   8,
+	VArchEnd       =   9,
+	HArchVWall     =  10,
+	VArch          =  11,
+	HArch          =  12,
+	Floor          =  13,
+	HWallVArch     =  14,
+	Pillar         =  15,
+	VCorner        =  16,
+	HCorner        =  17,
+	DirtHwall      =  18,
+	DirtVwall      =  19,
+	VDirtCorner    =  20,
+	HDirtCorner    =  21,
+	Dirt           =  22,
+	DirtHwallEnd   =  23,
+	DirtVwallEnd   =  24,
+	VDoor          =  25,
+	HDoor          =  26,
+	HFenceVWall    =  27,
+	HDoorVDoor     =  28,
+	DFence         =  29,
+	VDoorEnd       =  30,
+	HDoorEnd       =  31,
+	VFenceEnd      =  32,
+	VArchEnd2      =  33,
+	HArchVWall2    =  34,
+	VFence         =  35,
+	HFence         =  36,
+	HWallVFence    =  37,
+	HArchVFence    =  38,
+	HArchVDoor     =  39,
+	HArchVWall3    =  40,
+	DWall2         =  41,
+	HWallVArch2    =  42,
+	DWall3         =  43,
+	EntranceStairs =  64,
+	VWall2         =  79,
+	HWall2         =  80,
+	DWall4         =  82,
+	VWallEnd2      =  84,
+	VWall4         =  89,
+	VWall5         =  90,
+	HWall4         =  91,
+	HWall5         =  92,
+	VWall8         = 100,
+	Floor12        = 139,
+	Floor13        = 140,
+	Floor14        = 141,
+	Floor15        = 142,
+	Floor16        = 143,
+	Floor17        = 144,
+	Floor18        = 145,
+	VWall17        = 146,
+	VArch5         = 147,
+	HWallShadow    = 148,
+	HArchShadow    = 149,
+	Floor19        = 150,
+	Floor20        = 151,
+	Floor21        = 152,
+	HArchShadow2   = 153,
+	HWallShadow2   = 154,
+	Floor22        = 162,
+	Floor23        = 163,
+	DirtHWall2     = 199,
+	DirtVWall2     = 200,
+	DirtCorner2    = 202,
+	DirtHWallEnd2  = 204,
+	DirtVWallEnd2  = 205,
 	// clang-format on
 };
 
-enum CathedralTile : uint8_t {
+/** Contains shadows for 2x2 blocks of base tile IDs in the Cathedral. */
+const ShadowStruct ShadowPatterns[37] = {
 	// clang-format off
-	HWallShadow  = 148,
-	HArchShadow  = 149,
-	HArchShadow2 = 153,
-	HWallShadow2 = 154,
+	// strig,     s1,    s2,    s3,    nv1,         nv2,     nv3
+	{ HWallEnd,   Floor, 0,     Floor, Floor17,     0,       Floor15     },
+	{ VCorner,    Floor, 0,     Floor, Floor17,     0,       Floor15     },
+	{ Pillar,     Floor, 0,     Floor, Floor18,     0,       Floor15     },
+	{ DArch,      Floor, Floor, Floor, Floor21,     Floor13, Floor12     },
+	{ DArch,      Floor, VWall, Floor, Floor16,     VWall17, Floor12     },
+	{ DArch,      Floor, Floor, HWall, Floor16,     Floor13, HWallShadow },
+	{ DArch,      0,     VWall, HWall, 0,           VWall17, HWallShadow },
+	{ DArch,      Floor, VArch, Floor, Floor16,     VArch5,  Floor12     },
+	{ DArch,      Floor, Floor, HArch, Floor16,     Floor13, HArchShadow },
+	{ DArch,      Floor, VArch, HArch, Floor19,     VArch5,  HArchShadow },
+	{ DArch,      Floor, VWall, HArch, Floor16,     VWall17, HArchShadow },
+	{ DArch,      Floor, VArch, HWall, Floor16,     VArch5,  HWallShadow },
+	{ VArchEnd,   Floor, Floor, Floor, Floor17,     Floor13, Floor15     },
+	{ VArchEnd,   Floor, VWall, Floor, Floor17,     VWall17, Floor15     },
+	{ VArchEnd,   Floor, VArch, Floor, Floor20,     VArch5,  Floor15     },
+	{ HArchEnd,   Floor, 0,     Floor, Floor17,     0,       Floor12     },
+	{ HArchEnd,   Floor, 0,     HArch, Floor16,     0,       HArchShadow },
+	{ HArchEnd,   0,     0,     HWall, 0,           0,       HWallShadow },
+	{ VArch,      0,     0,     Floor, 0,           0,       Floor12     },
+	{ VArch,      Floor, 0,     Floor, Floor12,     0,       Floor12     },
+	{ VArch,      HWall, 0,     Floor, HWallShadow, 0,       Floor12     },
+	{ VArch,      HArch, 0,     Floor, HArchShadow, 0,       Floor12     },
+	{ VArch,      Floor, VArch, HArch, Floor12,     0,       HArchShadow },
+	{ HWallVArch, 0,     0,     Floor, 0,           0,       Floor12     },
+	{ HWallVArch, Floor, 0,     Floor, Floor12,     0,       Floor12     },
+	{ HWallVArch, HWall, 0,     Floor, HWallShadow, 0,       Floor12     },
+	{ HWallVArch, HArch, 0,     Floor, HArchShadow, 0,       Floor12     },
+	{ HWallVArch, Floor, VArch, HArch, Floor12,     0,       HArchShadow },
+	{ HArchVWall, 0,     Floor, 0,     0,           Floor13, 0           },
+	{ HArchVWall, Floor, Floor, 0,     Floor13,     Floor13, 0           },
+	{ HArchVWall, 0,     VWall, 0,     0,           VWall17, 0           },
+	{ HArchVWall, Floor, VArch, 0,     Floor13,     VArch5,  0           },
+	{ HArch,      0,     Floor, 0,     0,           Floor13, 0           },
+	{ HArch,      Floor, Floor, 0,     Floor13,     Floor13, 0           },
+	{ HArch,      0,     VWall, 0,     0,           VWall17, 0           },
+	{ HArch,      Floor, VArch, 0,     Floor13,     VArch5,  0           },
+	{ Corner,     Floor, VArch, HArch, Floor19,     0,       0           }
 	// clang-format on
 };
 
-enum CryptTile : uint8_t {
-	// clang-format off
-	VWall5      =  89,
-	VWall6      =  90,
-	VWall7      =  91,
-	HWall5      =  92,
-	HWall6      =  93,
-	HWall7      =  94,
-	VArch5      =  95,
-	HArch5      =  96,
-	Floor6      =  97,
-	Floor7      =  98,
-	Floor8      =  99,
-	Floor9      = 100,
-	Floor10     = 101,
-	VWall2      = 112,
-	HWall2      = 113,
-	Corner2     = 114,
-	DWall2      = 115,
-	DArch2      = 116,
-	VWallEnd2   = 117,
-	HWallEnd2   = 118,
-	HArchEnd2   = 119,
-	VArchEnd2   = 120,
-	HArchVWall2 = 121,
-	VArch2      = 122,
-	HArch2      = 123,
-	Floor2      = 124,
-	HWallVArch2 = 125,
-	Pillar3     = 126,
-	Pillar4     = 127,
-	Pillar5     = 128,
-	VWall3      = 129,
-	HWall3      = 130,
-	Corner3     = 131,
-	DWall3      = 132,
-	DArch3      = 133,
-	VWallEnd3   = 134,
-	HWallEnd3   = 135,
-	HArchEnd3   = 136,
-	VArchEnd3   = 137,
-	HArchVWall3 = 138,
-	VArch3      = 139,
-	HArch3      = 140,
-	Floor3      = 141,
-	HWallVArch3 = 142,
-	Pillar6     = 143,
-	Pillar7     = 144,
-	Pillar8     = 145,
-	VWall4      = 146,
-	HWall4      = 147,
-	Corner4     = 148,
-	DWall4      = 149,
-	DArch4      = 150,
-	VWallEnd4   = 151,
-	HWallEnd4   = 152,
-	HArchEnd4   = 153,
-	VArchEnd4   = 154,
-	HArchVWall4 = 155,
-	VArch4      = 156,
-	HArch4      = 157,
-	Floor4      = 158,
-	HWallVArch4 = 159,
-	Pillar9     = 160,
-	Pillar10    = 161,
-	Pillar11    = 162,
-	Floor11     = 163,
-	Floor12     = 164,
-	Floor13     = 165,
-	Floor14     = 166,
-	PillarHalf  = 167,
-	VWall8      = 173,
-	VWall9      = 174,
-	VWall10     = 175,
-	VWall11     = 176,
-	VWall12     = 177,
-	VWall13     = 178,
-	HWall8      = 179,
-	HWall9      = 180,
-	HWall10     = 181,
-	HWall11     = 182,
-	HWall12     = 183,
-	HWall13     = 184,
-	VArch6      = 185,
-	VArch7      = 186,
-	HArch6      = 187,
-	HArch7      = 188,
-	Floor15     = 189,
-	Floor16     = 190,
-	Floor17     = 191,
-	Pillar12    = 192,
-	Floor18     = 193,
-	Floor19     = 194,
-	Floor20     = 195,
-	Floor21     = 196,
-	Floor22     = 197,
-	Floor23     = 198,
-	VDemon      = 199,
-	HDemon      = 200,
-	VSuccubus   = 201,
-	HSuccubus   = 202,
-	Shadow1     = 203,
-	Shadow2     = 204,
-	Shadow3     = 205,
-	Shadow4     = 206,
-	Shadow5     = 207,
-	Shadow6     = 208,
-	Shadow7     = 209,
-	Shadow8     = 210,
-	Shadow9     = 211,
-	Shadow10    = 212,
-	Shadow11    = 213,
-	Shadow12    = 214,
-	Shadow13    = 215,
-	Shadow14    = 216,
-	Shadow15    = 217,
-	// clang-format on
+/** Maps tile IDs to their corresponding base tile ID. */
+const uint8_t BaseTypes[207] = {
+	0,
+	VWall, HWall, Corner, DWall, DArch, VWallEnd, HWallEnd, HArchEnd, VArchEnd,
+	HArchVWall, VArch, HArch, Floor, HWallVArch, Pillar, VCorner, HCorner,
+	0, 0, 0, 0, 0, 0, 0,
+	VWall, HWall, HArchVWall, DWall, DArch, VWallEnd, HWallEnd, HArchEnd,
+	VArchEnd, HArchVWall, VArch, HArch, HWallVArch, DArch, HWallVArch,
+	HArchVWall, DWall, HWallVArch, DWall, DArch,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	VWall, HWall, Corner, DWall, VWall, VWallEnd, HWallEnd, VCorner, HCorner,
+	HWall, VWall, VWall, HWall, HWall, VWall, VWall, HWall, HWall, HWall, HWall,
+	HWall, VWall, VWall, VArch, VWall, Floor, Floor, Floor, VWall, HWall, VWall,
+	HWall, VWall, HWall, VWall, HWall, HWall, HWall, HWall, HArch,
+	0, 0,
+	VArch, VWall, VArch, VWall, Floor,
+	0, 0, 0, 0, 0, 0, 0,
+	Floor, Floor, Floor, Floor, Floor, Floor, Floor, Floor, Floor, Floor, Floor,
+	Floor, Floor, VWall, VArch, HWall, HArch, Floor, Floor, Floor, HArch, HWall,
+	VWall, HWall, HWall, DWall, HWallVArch, DWall, HArchVWall, Floor, Floor,
+	DWall, DWall, VWall, VWall, DWall, HWall, HWall, Floor, Floor, Floor, Floor,
+	VDoor, HDoor, HDoorVDoor, VDoorEnd, HDoorEnd, DWall2, DWall3, HArchVWall3,
+	DWall2, HWallVArch2, DWall3, VDoor, DWall2, DWall3, HDoorVDoor, HDoorVDoor,
+	VWall, HWall, VDoor, HDoor, Dirt, Dirt, VDoor, HDoor,
+	0, 0, 0, 0, 0, 0, 0, 0
 };
 
-void InitCryptPieces()
-{
-	for (int j = 0; j < MAXDUNY; j++) {
-		for (int i = 0; i < MAXDUNX; i++) {
-			if (dPiece[i][j] == 76) {
-				dSpecial[i][j] = 1;
-			} else if (dPiece[i][j] == 79) {
-				dSpecial[i][j] = 2;
-			}
-		}
-	}
-}
-
-void ApplyCryptShadowsPatterns()
-{
-	for (int j = 1; j < DMAXY; j++) {
-		for (int i = 1; i < DMAXX; i++) {
-			switch (dungeon[i][j]) {
-			case DArch:
-			case DArch2:
-			case DArch3:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = Shadow1;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = Shadow2;
-				if (dungeon[i][j - 1] == Floor)
-					dungeon[i][j - 1] = Shadow3;
-				break;
-			case HWallEnd:
-			case HWallEnd2:
-			case HWallEnd3:
-			case HWallEnd4:
-			case Pillar:
-			case Pillar2:
-			case Pillar3:
-			case Pillar5:
-			case Pillar9:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = Shadow4;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = Shadow5;
-				break;
-			case HArchEnd:
-			case HArchEnd2:
-			case HArchEnd3:
-			case HArchEnd4:
-			case HWallVArch:
-			case HWallVArch2:
-			case HWallVArch3:
-			case HWallVArch4:
-			case VArch:
-			case VArch4:
-			case VArch5:
-			case VArch6:
-			case VArch7:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = Shadow1;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = Shadow2;
-				break;
-			case VArchEnd:
-			case VArchEnd2:
-			case VArchEnd4:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = Shadow4;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = Shadow5;
-				if (dungeon[i][j - 1] == Floor)
-					dungeon[i][j - 1] = Shadow3;
-				break;
-			case HArch:
-			case HArch2:
-			case HArchVWall:
-			case HArchVWall2:
-			case HArchVWall3:
-			case HArchVWall4:
-				if (dungeon[i][j - 1] == Floor)
-					dungeon[i][j - 1] = Shadow3;
-				break;
-			case HArch5:
-			case HArch6:
-				if (dungeon[i][j - 1] == Floor)
-					dungeon[i][j - 1] = Shadow6;
-				break;
-			case VArch2:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = Shadow9;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = Shadow10;
-				break;
-			case VArchEnd3:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = CryptTile::Shadow11;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = CryptTile::Shadow12;
-				if (dungeon[i][j - 1] == Floor)
-					dungeon[i][j - 1] = Shadow3;
-				break;
-			case VArch3:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = Shadow13;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = Shadow14;
-				break;
-			case HArch3:
-			case HArch4:
-				if (dungeon[i][j - 1] == Floor)
-					dungeon[i][j - 1] = Shadow15;
-				break;
-			case Pillar6:
-			case Pillar8:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = CryptTile::Shadow11;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = CryptTile::Shadow12;
-				break;
-			case DArch4:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = Shadow1;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = Shadow2;
-				if (dungeon[i][j - 1] == Floor)
-					dungeon[i][j - 1] = Shadow15;
-				break;
-			case Pillar11:
-			case Pillar12:
-			case PillarHalf:
-				if (dungeon[i - 1][j] == Floor)
-					dungeon[i - 1][j] = Shadow7;
-				if (dungeon[i - 1][j - 1] == Floor)
-					dungeon[i - 1][j - 1] = Shadow8;
-				break;
-			}
-		}
-	}
-}
+/** Maps tile IDs to their corresponding undecorated tile ID. */
+const uint8_t TileDecorations[207] = {
+	0,
+	VWall, HWall, Corner, DWall, DArch, VWallEnd, HWallEnd, HArchEnd, VArchEnd,
+	HArchVWall, VArch, HArch, Floor, HWallVArch, Pillar, VCorner, HCorner,
+	0, 0, 0, 0, 0, 0, 0,
+	VDoor, HDoor,
+	0,
+	HDoorVDoor,
+	0,
+	VDoorEnd, HDoorEnd,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	HArchVWall3, DWall2, HWallVArch2, DWall3,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	VWall2, HWall2,
+	0,
+	DWall4,
+	0, 0, 0, 0, 0, 0,
+	VWall2,
+	0,
+	HWall2,
+	0, 0,
+	VWall2, HWall2,
+	0,
+	HWall, HWall, HWall, VWall, VWall, VArch, VDoor, Floor, Floor, Floor, VWall,
+	HWall, VWall, HWall, VWall, HWall, VWall, HWall, HWall, HWall, HWall, HArch,
+	0, 0,
+	VArch, VWall, VArch, VWall, Floor,
+	0, 0, 0, 0, 0, 0, 0,
+	Floor, Floor, Floor, Floor, Floor, Floor,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
 
 void ApplyShadowsPatterns()
 {
-	uint8_t sd[2][2];
+	uint8_t slice[2][2];
 
 	for (int y = 1; y < DMAXY; y++) {
 		for (int x = 1; x < DMAXX; x++) {
-			sd[0][0] = BSTYPES[dungeon[x][y]];
-			sd[1][0] = BSTYPES[dungeon[x - 1][y]];
-			sd[0][1] = BSTYPES[dungeon[x][y - 1]];
-			sd[1][1] = BSTYPES[dungeon[x - 1][y - 1]];
+			slice[0][0] = BaseTypes[dungeon[x][y]];
+			slice[1][0] = BaseTypes[dungeon[x - 1][y]];
+			slice[0][1] = BaseTypes[dungeon[x][y - 1]];
+			slice[1][1] = BaseTypes[dungeon[x - 1][y - 1]];
 
-			for (const auto &shadow : SPATS) {
-				if (shadow.strig != sd[0][0])
+			for (const auto &shadow : ShadowPatterns) {
+				if (shadow.strig != slice[0][0])
 					continue;
-				if (shadow.s1 != 0 && shadow.s1 != sd[1][1])
+				if (shadow.s1 != 0 && shadow.s1 != slice[1][1])
 					continue;
-				if (shadow.s2 != 0 && shadow.s2 != sd[0][1])
+				if (shadow.s2 != 0 && shadow.s2 != slice[0][1])
 					continue;
-				if (shadow.s3 != 0 && shadow.s3 != sd[1][0])
+				if (shadow.s3 != 0 && shadow.s3 != slice[1][0])
 					continue;
 
 				if (shadow.nv1 != 0 && !Protected.test(x - 1, y - 1)) {
@@ -740,22 +316,22 @@ void ApplyShadowsPatterns()
 			if (Protected.test(x - 1, y))
 				continue;
 
-			if (dungeon[x - 1][y] == 139) {
-				uint8_t tnv3 = 139;
+			if (dungeon[x - 1][y] == Floor12) {
+				Tile tnv3 = Floor12;
 				if (IsAnyOf(dungeon[x][y], DFence, VFenceEnd, VFence, HWallVFence, HArchVFence, HArchVDoor)) {
-					tnv3 = 141;
+					tnv3 = Floor14;
 				}
 				dungeon[x - 1][y] = tnv3;
 			}
 			if (dungeon[x - 1][y] == HArchShadow) {
-				uint8_t tnv3 = HArchShadow;
+				Tile tnv3 = HArchShadow;
 				if (IsAnyOf(dungeon[x][y], DFence, VFenceEnd, VFence, HWallVFence, HArchVFence, HArchVDoor)) {
 					tnv3 = HArchShadow2;
 				}
 				dungeon[x - 1][y] = tnv3;
 			}
 			if (dungeon[x - 1][y] == HWallShadow) {
-				uint8_t tnv3 = HWallShadow;
+				Tile tnv3 = HWallShadow;
 				if (IsAnyOf(dungeon[x][y], DFence, VFenceEnd, VFence, HWallVFence, HArchVFence, HArchVDoor)) {
 					tnv3 = HWallShadow2;
 				}
@@ -767,7 +343,7 @@ void ApplyShadowsPatterns()
 
 bool CanReplaceTile(uint8_t replace, Point tile)
 {
-	if (replace < 84 || replace > 100) {
+	if (replace < VWallEnd2 || replace > VWall8) {
 		return true;
 	}
 
@@ -775,7 +351,7 @@ bool CanReplaceTile(uint8_t replace, Point tile)
 	constexpr auto ComparisonWithBoundsCheck = [](Point p1, Point p2) {
 		return (p1.x >= 0 && p1.x < DMAXX && p1.y >= 0 && p1.y < DMAXY)
 		    && (p2.x >= 0 && p2.x < DMAXX && p2.y >= 0 && p2.y < DMAXY)
-		    && (dungeon[p1.x][p1.y] >= 84 && dungeon[p2.x][p2.y] <= 100);
+		    && (dungeon[p1.x][p1.y] >= VWallEnd2 && dungeon[p2.x][p2.y] <= VWall8);
 	};
 	if (ComparisonWithBoundsCheck(tile + Direction::NorthWest, tile + Direction::NorthWest)
 	    || ComparisonWithBoundsCheck(tile + Direction::SouthEast, tile + Direction::NorthWest)
@@ -787,41 +363,18 @@ bool CanReplaceTile(uint8_t replace, Point tile)
 	return true;
 }
 
-void PlaceMiniSetRandom(const Miniset &miniset, int rndper)
-{
-	int sw = miniset.size.width;
-	int sh = miniset.size.height;
-
-	for (int sy = 0; sy < DMAXY - sh; sy++) {
-		for (int sx = 0; sx < DMAXX - sw; sx++) {
-			if (!miniset.matches({ sx, sy }, false))
-				continue;
-			if (!CanReplaceTile(miniset.replace[0][0], { sx, sy }))
-				continue;
-			if (GenerateRnd(100) >= rndper)
-				continue;
-			miniset.place({ sx, sy });
-		}
-	}
-}
-
-void PlaceMiniSetRandom1x1(uint8_t search, uint8_t replace, int rndper)
-{
-	PlaceMiniSetRandom({ { 1, 1 }, { { search } }, { { replace } } }, rndper);
-}
-
 void FillFloor()
 {
 	for (int j = 0; j < DMAXY; j++) {
 		for (int i = 0; i < DMAXX; i++) {
-			if (!Protected.test(i, j) && dungeon[i][j] == Tile::Floor) {
-				int rv = GenerateRnd(3);
+			if (dungeon[i][j] != Floor || Protected.test(i, j))
+				continue;
 
-				if (rv == 1)
-					dungeon[i][j] = 162;
-				if (rv == 2)
-					dungeon[i][j] = 163;
-			}
+			int rv = GenerateRnd(3);
+			if (rv == 1)
+				dungeon[i][j] = Floor22;
+			else if (rv == 2)
+				dungeon[i][j] = Floor23;
 		}
 	}
 }
@@ -864,28 +417,28 @@ void InitDungeonPieces()
 
 void InitDungeonFlags()
 {
-	memset(dungeon, 0, sizeof(dungeon));
+	memset(dungeon, Dirt, sizeof(dungeon));
 	Protected.reset();
 	Chamber.reset();
 }
 
-void MapRoom(int x, int y, int width, int height)
+void MapRoom(Rectangle room)
 {
-	for (int j = 0; j < height; j++) {
-		for (int i = 0; i < width; i++) {
-			dungeon[x + i][y + j] = Tile::VWall;
+	for (int y = 0; y < room.size.height; y++) {
+		for (int x = 0; x < room.size.width; x++) {
+			DungeonMask.set(room.position.x + x, room.position.y + y);
 		}
 	}
 }
 
-bool CheckRoom(int x, int y, int width, int height)
+bool CheckRoom(Rectangle room)
 {
-	for (int j = 0; j < height; j++) {
-		for (int i = 0; i < width; i++) {
-			if (i + x < 0 || i + x >= DMAXX || j + y < 0 || j + y >= DMAXY) {
+	for (int j = 0; j < room.size.height; j++) {
+		for (int i = 0; i < room.size.width; i++) {
+			if (i + room.position.x < 0 || i + room.position.x >= DMAXX || j + room.position.y < 0 || j + room.position.y >= DMAXY) {
 				return false;
 			}
-			if (dungeon[i + x][j + y] != 0) {
+			if (DungeonMask.test(i + room.position.x, j + room.position.y)) {
 				return false;
 			}
 		}
@@ -894,146 +447,108 @@ bool CheckRoom(int x, int y, int width, int height)
 	return true;
 }
 
-void GenerateRoom(int x, int y, int w, int h, int dir)
+void GenerateRoom(Rectangle area, bool verticalLayout)
 {
-	int dirProb = GenerateRnd(4);
-	int num = 0;
+	bool rotate = FlipCoin(4);
+	verticalLayout = (!verticalLayout && rotate) || (verticalLayout && !rotate);
 
-	bool ran;
-	if ((dir == 1 && dirProb == 0) || (dir != 1 && dirProb != 0)) {
-		int cw;
-		int ch;
-		int cx1;
-		int cy1;
-		do {
-			cw = (GenerateRnd(5) + 2) & ~1;
-			ch = (GenerateRnd(5) + 2) & ~1;
-			cx1 = x - cw;
-			cy1 = h / 2 + y - ch / 2;
-			ran = CheckRoom(cx1 - 1, cy1 - 1, ch + 2, cw + 1); /// BUGFIX: swap args 3 and 4 ("ch+2" and "cw+1") (workaround applied below)
-			num++;
-		} while (!ran && num < 20);
+	bool placeRoom1;
+	Rectangle room1;
 
-		if (ran)
-			MapRoom(cx1, cy1, std::min(DMAXX - cx1, cw), std::min(DMAXX - cy1, ch));
-		int cx2 = x + w;
-		bool ran2 = CheckRoom(cx2, cy1 - 1, cw + 1, ch + 2);
-		if (ran2)
-			MapRoom(cx2, cy1, cw, ch);
-		if (ran)
-			GenerateRoom(cx1, cy1, cw, ch, 1);
-		if (ran2)
-			GenerateRoom(cx2, cy1, cw, ch, 1);
-		return;
+	for (int num = 0; num < 20; num++) {
+		room1.size = { (GenerateRnd(5) + 2) & ~1, (GenerateRnd(5) + 2) & ~1 };
+		room1.position = area.position;
+		if (verticalLayout) {
+			room1.position += Displacement { -room1.size.width, area.size.height / 2 - room1.size.height / 2 };
+			placeRoom1 = CheckRoom({ room1.position + Displacement { -1, -1 }, { room1.size.height + 2, room1.size.width + 1 } }); /// BUGFIX: swap height and width ({ room1.size.width + 1, room1.size.height + 2 }) (workaround applied below)
+		} else {
+			room1.position += Displacement { area.size.width / 2 - room1.size.width / 2, -room1.size.height };
+			placeRoom1 = CheckRoom({ room1.position + Displacement { -1, -1 }, { room1.size.width + 2, room1.size.height + 1 } });
+		}
+		if (placeRoom1)
+			break;
 	}
 
-	int width;
-	int height;
-	int rx;
-	int ry;
-	do {
-		width = (GenerateRnd(5) + 2) & ~1;
-		height = (GenerateRnd(5) + 2) & ~1;
-		rx = w / 2 + x - width / 2;
-		ry = y - height;
-		ran = CheckRoom(rx - 1, ry - 1, width + 2, height + 1);
-		num++;
-	} while (!ran && num < 20);
+	if (placeRoom1)
+		MapRoom({ room1.position, { std::min(DMAXX - room1.position.x, room1.size.width), std::min(DMAXX - room1.position.y, room1.size.height) } });
 
-	if (ran)
-		MapRoom(rx, ry, width, height);
-	int ry2 = y + h;
-	bool ran2 = CheckRoom(rx - 1, ry2, width + 2, height + 1);
-	if (ran2)
-		MapRoom(rx, ry2, width, height);
-	if (ran)
-		GenerateRoom(rx, ry, width, height, 0);
-	if (ran2)
-		GenerateRoom(rx, ry2, width, height, 0);
+	bool placeRoom2;
+	Rectangle room2 = room1;
+	if (verticalLayout) {
+		room2.position.x = area.position.x + area.size.width;
+		placeRoom2 = CheckRoom({ room2.position + Displacement { 0, -1 }, { room2.size.width + 1, room2.size.height + 2 } });
+	} else {
+		room2.position.y = area.position.y + area.size.height;
+		placeRoom2 = CheckRoom({ room2.position + Displacement { -1, 0 }, { room2.size.width + 2, room2.size.height + 1 } });
+	}
+
+	if (placeRoom2)
+		MapRoom(room2);
+	if (placeRoom1)
+		GenerateRoom(room1, !verticalLayout);
+	if (placeRoom2)
+		GenerateRoom(room2, !verticalLayout);
 }
 
+/**
+ * @brief Generate a boolean dungoen room layout
+ */
 void FirstRoom()
 {
-	VerticalLayout = !FlipCoin();
-	HasChamber1 = FlipCoin();
-	HasChamber2 = FlipCoin();
-	HasChamber3 = FlipCoin();
+	DungeonMask.reset();
+
+	VerticalLayout = FlipCoin();
+	HasChamber1 = !FlipCoin();
+	HasChamber2 = !FlipCoin();
+	HasChamber3 = !FlipCoin();
 
 	if (!HasChamber1 || !HasChamber3)
 		HasChamber2 = true;
 
-	if (VerticalLayout) {
-		int ys = 1;
-		int ye = DMAXY - 1;
-
-		if (HasChamber1)
-			MapRoom(15, 1, 10, 10);
-		else
-			ys = 18;
-
-		if (HasChamber2)
-			MapRoom(15, 15, 10, 10);
-		if (HasChamber3)
-			MapRoom(15, 29, 10, 10);
-		else
-			ye = 22;
-
-		for (int y = ys; y < ye; y++) {
-			dungeon[17][y] = Tile::VWall;
-			dungeon[18][y] = Tile::VWall;
-			dungeon[19][y] = Tile::VWall;
-			dungeon[20][y] = Tile::VWall;
-			dungeon[21][y] = Tile::VWall;
-			dungeon[22][y] = Tile::VWall;
-		}
-
-		if (HasChamber1)
-			GenerateRoom(15, 1, 10, 10, 0);
-		if (HasChamber2)
-			GenerateRoom(15, 15, 10, 10, 0);
-		if (HasChamber3)
-			GenerateRoom(15, 29, 10, 10, 0);
-	} else {
-		int xs = 1;
-		int xe = DMAXX - 1;
-
-		if (HasChamber1)
-			MapRoom(1, 15, 10, 10);
-		else
-			xs = 18;
-
-		if (HasChamber2)
-			MapRoom(15, 15, 10, 10);
-		if (HasChamber3)
-			MapRoom(29, 15, 10, 10);
-		else
-			xe = 22;
-
-		for (int x = xs; x < xe; x++) {
-			dungeon[x][17] = Tile::VWall;
-			dungeon[x][18] = Tile::VWall;
-			dungeon[x][19] = Tile::VWall;
-			dungeon[x][20] = Tile::VWall;
-			dungeon[x][21] = Tile::VWall;
-			dungeon[x][22] = Tile::VWall;
-		}
-
-		if (HasChamber1)
-			GenerateRoom(1, 15, 10, 10, 1);
-		if (HasChamber2)
-			GenerateRoom(15, 15, 10, 10, 1);
-		if (HasChamber3)
-			GenerateRoom(29, 15, 10, 10, 1);
+	Rectangle chamber1 { { 1, 15 }, { 10, 10 } };
+	Rectangle chamber2 { { 15, 15 }, { 10, 10 } };
+	Rectangle chamber3 { { 29, 15 }, { 10, 10 } };
+	Rectangle hallway { { 1, 17 }, { 38, 6 } };
+	if (!HasChamber1) {
+		hallway.position.x += 17;
+		hallway.size.width -= 17;
 	}
+	if (!HasChamber3)
+		hallway.size.width -= 16;
+	if (VerticalLayout) {
+		std::swap(chamber1.position.x, chamber1.position.y);
+		std::swap(chamber3.position.x, chamber3.position.y);
+		std::swap(hallway.position.x, hallway.position.y);
+		std::swap(hallway.size.width, hallway.size.height);
+	}
+
+	if (HasChamber1)
+		MapRoom(chamber1);
+	if (HasChamber2)
+		MapRoom(chamber2);
+	if (HasChamber3)
+		MapRoom(chamber3);
+
+	MapRoom(hallway);
+
+	if (HasChamber1)
+		GenerateRoom(chamber1, VerticalLayout);
+	if (HasChamber2)
+		GenerateRoom(chamber2, VerticalLayout);
+	if (HasChamber3)
+		GenerateRoom(chamber3, VerticalLayout);
 }
 
+/**
+ * @brief Find the number of mega tiles used by layout
+ */
 int FindArea()
 {
 	int rv = 0;
 
 	for (int j = 0; j < DMAXY; j++) {
 		for (int i = 0; i < DMAXX; i++) { // NOLINT(modernize-loop-convert)
-			if (dungeon[i][j] == Tile::VWall)
+			if (DungeonMask.test(i, j))
 				rv++;
 		}
 	}
@@ -1041,170 +556,147 @@ int FindArea()
 	return rv;
 }
 
-void MakeDungeon()
-{
-	for (int j = 0; j < DMAXY; j++) {
-		for (int i = 0; i < DMAXX; i++) {
-			int i2 = i * 2;
-			int j2 = j * 2;
-			L5dungeon[i2][j2] = dungeon[i][j];
-			L5dungeon[i2][j2 + 1] = dungeon[i][j];
-			L5dungeon[i2 + 1][j2] = dungeon[i][j];
-			L5dungeon[i2 + 1][j2 + 1] = dungeon[i][j];
-		}
-	}
-}
-
 void MakeDmt()
 {
-	for (int j = 0; j < DMAXY; j++) {
-		for (int i = 0; i < DMAXX; i++) { // NOLINT(modernize-loop-convert)
-			dungeon[i][j] = 22;
-		}
-	}
-
-	int dmty = 1;
-	for (int j = 0; dmty <= 77; j++, dmty += 2) {
-		int dmtx = 1;
-		for (int i = 0; dmtx <= 77; i++, dmtx += 2) {
-			int val = 8 * L5dungeon[dmtx + 1][dmty + 1]
-			    + 4 * L5dungeon[dmtx][dmty + 1]
-			    + 2 * L5dungeon[dmtx + 1][dmty]
-			    + L5dungeon[dmtx][dmty];
-			dungeon[i][j] = L5ConvTbl[val];
+	for (int j = 0; j < DMAXY - 1; j++) {
+		for (int i = 0; i < DMAXX - 1; i++) {
+			if (DungeonMask.test(i, j))
+				dungeon[i][j] = Floor;
+			else if (!DungeonMask.test(i + 1, j + 1) && DungeonMask.test(i, j + 1) && DungeonMask.test(i + 1, j))
+				dungeon[i][j] = Floor; // Remove diagonal corners
+			else if (DungeonMask.test(i + 1, j + 1) && DungeonMask.test(i, j + 1) && DungeonMask.test(i + 1, j))
+				dungeon[i][j] = VCorner;
+			else if (DungeonMask.test(i, j + 1))
+				dungeon[i][j] = HWall;
+			else if (DungeonMask.test(i + 1, j))
+				dungeon[i][j] = VWall;
+			else if (DungeonMask.test(i + 1, j + 1))
+				dungeon[i][j] = DWall;
+			else
+				dungeon[i][j] = Dirt;
 		}
 	}
 }
 
-int HorizontalWallOk(int i, int j)
+int HorizontalWallOk(Point position)
 {
-	int x;
-	for (x = 1; dungeon[i + x][j] == 13; x++) {
-		if (dungeon[i + x][j - 1] != 13 || dungeon[i + x][j + 1] != 13 || Protected.test(i + x, j) || Chamber.test(i + x, j))
+	int length;
+	for (length = 1; dungeon[position.x + length][position.y] == Floor; length++) {
+		if (dungeon[position.x + length][position.y - 1] != Floor || dungeon[position.x + length][position.y + 1] != Floor || Protected.test(position.x + length, position.y) || Chamber.test(position.x + length, position.y))
 			break;
 	}
 
-	bool wallok = false;
-	if (dungeon[i + x][j] >= 3 && dungeon[i + x][j] <= 7)
-		wallok = true;
-	if (dungeon[i + x][j] >= 16 && dungeon[i + x][j] <= 24)
-		wallok = true;
-	if (dungeon[i + x][j] == 22)
-		wallok = false;
-	if (x == 1)
-		wallok = false;
+	if (length == 1)
+		return -1;
 
-	if (wallok)
-		return x;
+	auto tileId = static_cast<Tile>(dungeon[position.x + length][position.y]);
 
-	return -1;
+	if (!IsAnyOf(tileId, Corner, DWall, DArch, VWallEnd, HWallEnd, VCorner, HCorner, DirtHwall, DirtVwall, VDirtCorner, HDirtCorner, DirtHwallEnd, DirtVwallEnd))
+		return -1;
+
+	return length;
 }
 
-int VerticalWallOk(int i, int j)
+int VerticalWallOk(Point position)
 {
-	int y;
-	for (y = 1; dungeon[i][j + y] == 13; y++) {
-		if (dungeon[i - 1][j + y] != 13 || dungeon[i + 1][j + y] != 13 || Protected.test(i, j + y) || Chamber.test(i, j + y))
+	int length;
+	for (length = 1; dungeon[position.x][position.y + length] == Floor; length++) {
+		if (dungeon[position.x - 1][position.y + length] != Floor || dungeon[position.x + 1][position.y + length] != Floor || Protected.test(position.x, position.y + length) || Chamber.test(position.x, position.y + length))
 			break;
 	}
 
-	bool wallok = false;
-	if (dungeon[i][j + y] >= 3 && dungeon[i][j + y] <= 7)
-		wallok = true;
-	if (dungeon[i][j + y] >= 16 && dungeon[i][j + y] <= 24)
-		wallok = true;
-	if (dungeon[i][j + y] == 22)
-		wallok = false;
-	if (y == 1)
-		wallok = false;
+	if (length == 1)
+		return -1;
 
-	if (wallok)
-		return y;
+	auto tileId = static_cast<Tile>(dungeon[position.x][position.y + length]);
 
-	return -1;
+	if (!IsAnyOf(tileId, Corner, DWall, DArch, VWallEnd, HWallEnd, VCorner, HCorner, DirtHwall, DirtVwall, VDirtCorner, HDirtCorner, DirtHwallEnd, DirtVwallEnd))
+		return -1;
+
+	return length;
 }
 
-void HorizontalWall(int i, int j, Tile p, int dx)
+void HorizontalWall(Point position, Tile start, int maxX)
 {
-	Tile dt = Tile::HWall;
-	Tile wt = Tile::HDoor;
+	Tile wallTile = HWall;
+	Tile doorTile = HDoor;
 
 	switch (GenerateRnd(4)) {
 	case 2: // Add arch
-		dt = Tile::HArch;
-		wt = Tile::HArch;
-		if (p == Tile::HWall)
-			p = Tile::HArch;
-		else if (p == Tile::DWall)
-			p = Tile::HArchVWall;
+		wallTile = HArch;
+		doorTile = HArch;
+		if (start == HWall)
+			start = HArch;
+		else if (start == DWall)
+			start = HArchVWall;
 		break;
 	case 3: // Add Fence
-		dt = Tile::HFence;
-		if (p == Tile::HWall)
-			p = Tile::HFence;
-		else if (p == Tile::DWall)
-			p = Tile::HFenceVWall;
+		wallTile = HFence;
+		if (start == HWall)
+			start = HFence;
+		else if (start == DWall)
+			start = HFenceVWall;
 		break;
 	default:
 		break;
 	}
 
 	if (GenerateRnd(6) == 5)
-		wt = Tile::HArch;
+		doorTile = HArch;
 
-	dungeon[i][j] = p;
+	dungeon[position.x][position.y] = start;
 
-	for (int xx = 1; xx < dx; xx++) {
-		dungeon[i + xx][j] = dt;
+	for (int x = 1; x < maxX; x++) {
+		dungeon[position.x + x][position.y] = wallTile;
 	}
 
-	int xx = GenerateRnd(dx - 1) + 1;
+	int x = GenerateRnd(maxX - 1) + 1;
 
-	dungeon[i + xx][j] = wt;
-	if (wt == Tile::HDoor) {
-		Protected.set(i + xx, j);
+	dungeon[position.x + x][position.y] = doorTile;
+	if (doorTile == HDoor) {
+		Protected.set(position.x + x, position.y);
 	}
 }
 
-void VerticalWall(int i, int j, Tile p, int dy)
+void VerticalWall(Point position, Tile start, int maxY)
 {
-	Tile dt = Tile::VWall;
-	Tile wt = Tile::VDoor;
+	Tile wallTile = VWall;
+	Tile doorTile = VDoor;
 
 	switch (GenerateRnd(4)) {
 	case 2: // Add arch
-		dt = Tile::VArch;
-		wt = Tile::VArch;
-		if (p == Tile::VWall)
-			p = Tile::VArch;
-		else if (p == Tile::DWall)
-			p = Tile::HWallVArch;
+		wallTile = VArch;
+		doorTile = VArch;
+		if (start == VWall)
+			start = VArch;
+		else if (start == DWall)
+			start = HWallVArch;
 		break;
 	case 3: // Add Fence
-		dt = Tile::VFence;
-		if (p == Tile::VWall)
-			p = Tile::VFence;
-		else if (p == Tile::DWall)
-			p = Tile::HWallVFence;
+		wallTile = VFence;
+		if (start == VWall)
+			start = VFence;
+		else if (start == DWall)
+			start = HWallVFence;
 		break;
 	default:
 		break;
 	}
 
 	if (GenerateRnd(6) == 5)
-		wt = Tile::VArch;
+		doorTile = VArch;
 
-	dungeon[i][j] = p;
+	dungeon[position.x][position.y] = start;
 
-	for (int yy = 1; yy < dy; yy++) {
-		dungeon[i][j + yy] = dt;
+	for (int y = 1; y < maxY; y++) {
+		dungeon[position.x][position.y + y] = wallTile;
 	}
 
-	int yy = GenerateRnd(dy - 1) + 1;
+	int y = GenerateRnd(maxY - 1) + 1;
 
-	dungeon[i][j + yy] = wt;
-	if (wt == Tile::VDoor) {
-		Protected.set(i, j + yy);
+	dungeon[position.x][position.y + y] = doorTile;
+	if (doorTile == VDoor) {
+		Protected.set(position.x, position.y + y);
 	}
 }
 
@@ -1212,123 +704,123 @@ void AddWall()
 {
 	for (int j = 0; j < DMAXY; j++) {
 		for (int i = 0; i < DMAXX; i++) {
-			if (!Protected.test(i, j) && !Chamber.test(i, j)) {
-				if (dungeon[i][j] == Tile::Corner) {
-					AdvanceRndSeed();
-					int x = HorizontalWallOk(i, j);
-					if (x != -1) {
-						HorizontalWall(i, j, Tile::HWall, x);
-					}
+			if (Protected.test(i, j) || Chamber.test(i, j))
+				continue;
+
+			if (dungeon[i][j] == Corner) {
+				AdvanceRndSeed();
+				int maxX = HorizontalWallOk({ i, j });
+				if (maxX != -1) {
+					HorizontalWall({ i, j }, HWall, maxX);
 				}
-				if (dungeon[i][j] == Tile::Corner) {
-					AdvanceRndSeed();
-					int y = VerticalWallOk(i, j);
-					if (y != -1) {
-						VerticalWall(i, j, Tile::VWall, y);
-					}
+			}
+			if (dungeon[i][j] == Corner) {
+				AdvanceRndSeed();
+				int maxY = VerticalWallOk({ i, j });
+				if (maxY != -1) {
+					VerticalWall({ i, j }, VWall, maxY);
 				}
-				if (dungeon[i][j] == Tile::VWallEnd) {
-					AdvanceRndSeed();
-					int x = HorizontalWallOk(i, j);
-					if (x != -1) {
-						HorizontalWall(i, j, Tile::DWall, x);
-					}
+			}
+			if (dungeon[i][j] == VWallEnd) {
+				AdvanceRndSeed();
+				int maxX = HorizontalWallOk({ i, j });
+				if (maxX != -1) {
+					HorizontalWall({ i, j }, DWall, maxX);
 				}
-				if (dungeon[i][j] == Tile::HWallEnd) {
-					AdvanceRndSeed();
-					int y = VerticalWallOk(i, j);
-					if (y != -1) {
-						VerticalWall(i, j, Tile::DWall, y);
-					}
+			}
+			if (dungeon[i][j] == HWallEnd) {
+				AdvanceRndSeed();
+				int maxY = VerticalWallOk({ i, j });
+				if (maxY != -1) {
+					VerticalWall({ i, j }, DWall, maxY);
 				}
-				if (dungeon[i][j] == Tile::HWall) {
-					AdvanceRndSeed();
-					int x = HorizontalWallOk(i, j);
-					if (x != -1) {
-						HorizontalWall(i, j, Tile::HWall, x);
-					}
+			}
+			if (dungeon[i][j] == HWall) {
+				AdvanceRndSeed();
+				int maxX = HorizontalWallOk({ i, j });
+				if (maxX != -1) {
+					HorizontalWall({ i, j }, HWall, maxX);
 				}
-				if (dungeon[i][j] == Tile::VWall) {
-					AdvanceRndSeed();
-					int y = VerticalWallOk(i, j);
-					if (y != -1) {
-						VerticalWall(i, j, Tile::VWall, y);
-					}
+			}
+			if (dungeon[i][j] == VWall) {
+				AdvanceRndSeed();
+				int maxY = VerticalWallOk({ i, j });
+				if (maxY != -1) {
+					VerticalWall({ i, j }, VWall, maxY);
 				}
 			}
 		}
 	}
 }
 
-void GenerateChamber(int sx, int sy, bool topflag, bool bottomflag, bool leftflag, bool rightflag)
+void GenerateChamber(Point position, bool connectPrevious, bool connectNext, bool verticalLayout)
 {
-	if (topflag) {
-		dungeon[sx + 2][sy] = Tile::HArch;
-		dungeon[sx + 3][sy] = Tile::HArch;
-		dungeon[sx + 4][sy] = Tile::Corner;
-		dungeon[sx + 7][sy] = Tile::VArchEnd;
-		dungeon[sx + 8][sy] = Tile::HArch;
-		dungeon[sx + 9][sy] = Tile::HWall;
-	}
-	if (bottomflag) {
-		sy += 11;
-		dungeon[sx + 2][sy] = Tile::HArchVWall;
-		dungeon[sx + 3][sy] = Tile::HArch;
-		dungeon[sx + 4][sy] = Tile::HArchEnd;
-		dungeon[sx + 7][sy] = Tile::DArch;
-		dungeon[sx + 8][sy] = Tile::HArch;
-		if (dungeon[sx + 9][sy] != Tile::DWall) {
-			dungeon[sx + 9][sy] = Tile::DirtCorner;
+	if (connectPrevious) {
+		if (verticalLayout) {
+			dungeon[position.x + 2][position.y] = HArch;
+			dungeon[position.x + 3][position.y] = HArch;
+			dungeon[position.x + 4][position.y] = Corner;
+			dungeon[position.x + 7][position.y] = VArchEnd;
+			dungeon[position.x + 8][position.y] = HArch;
+			dungeon[position.x + 9][position.y] = HWall;
+		} else {
+			dungeon[position.x][position.y + 2] = VArch;
+			dungeon[position.x][position.y + 3] = VArch;
+			dungeon[position.x][position.y + 4] = Corner;
+			dungeon[position.x][position.y + 7] = HArchEnd;
+			dungeon[position.x][position.y + 8] = VArch;
+			dungeon[position.x][position.y + 9] = VWall;
 		}
-		sy -= 11;
 	}
-	if (leftflag) {
-		dungeon[sx][sy + 2] = Tile::VArch;
-		dungeon[sx][sy + 3] = Tile::VArch;
-		dungeon[sx][sy + 4] = Tile::Corner;
-		dungeon[sx][sy + 7] = Tile::HArchEnd;
-		dungeon[sx][sy + 8] = Tile::VArch;
-		dungeon[sx][sy + 9] = Tile::VWall;
-	}
-	if (rightflag) {
-		sx += 11;
-		dungeon[sx][sy + 2] = Tile::HWallVArch;
-		dungeon[sx][sy + 3] = Tile::VArch;
-		dungeon[sx][sy + 4] = Tile::VArchEnd;
-		dungeon[sx][sy + 7] = Tile::DArch;
-		dungeon[sx][sy + 8] = Tile::VArch;
-		if (dungeon[sx][sy + 9] != Tile::DWall) {
-			dungeon[sx][sy + 9] = Tile::DirtCorner;
-		}
-		sx -= 11;
-	}
-
-	for (int j = 1; j < 11; j++) {
-		for (int i = 1; i < 11; i++) {
-			dungeon[i + sx][j + sy] = Tile::Floor;
-			Chamber.set(i + sx, j + sy);
+	if (connectNext) {
+		if (verticalLayout) {
+			position.y += 11;
+			dungeon[position.x + 2][position.y] = HArchVWall;
+			dungeon[position.x + 3][position.y] = HArch;
+			dungeon[position.x + 4][position.y] = HArchEnd;
+			dungeon[position.x + 7][position.y] = DArch;
+			dungeon[position.x + 8][position.y] = HArch;
+			if (dungeon[position.x + 9][position.y] != DWall)
+				dungeon[position.x + 9][position.y] = HDirtCorner;
+			position.y -= 11;
+		} else {
+			position.x += 11;
+			dungeon[position.x][position.y + 2] = HWallVArch;
+			dungeon[position.x][position.y + 3] = VArch;
+			dungeon[position.x][position.y + 4] = VArchEnd;
+			dungeon[position.x][position.y + 7] = DArch;
+			dungeon[position.x][position.y + 8] = VArch;
+			if (dungeon[position.x][position.y + 9] != DWall)
+				dungeon[position.x][position.y + 9] = HDirtCorner;
+			position.x -= 11;
 		}
 	}
 
-	dungeon[sx + 4][sy + 4] = Tile::Pillar;
-	dungeon[sx + 7][sy + 4] = Tile::Pillar;
-	dungeon[sx + 4][sy + 7] = Tile::Pillar;
-	dungeon[sx + 7][sy + 7] = Tile::Pillar;
+	for (int y = 1; y < 11; y++) {
+		for (int x = 1; x < 11; x++) {
+			dungeon[position.x + x][position.y + y] = Floor;
+			Chamber.set(position.x + x, position.y + y);
+		}
+	}
+
+	dungeon[position.x + 4][position.y + 4] = Pillar;
+	dungeon[position.x + 7][position.y + 4] = Pillar;
+	dungeon[position.x + 4][position.y + 7] = Pillar;
+	dungeon[position.x + 7][position.y + 7] = Pillar;
 }
 
-void GenerateHall(int x1, int y1, int x2, int y2)
+void GenerateHall(Point start, int length, bool verticalLayout)
 {
-	if (y1 == y2) {
-		for (int i = x1; i < x2; i++) {
-			dungeon[i][y1] = Tile::HArch;
-			dungeon[i][y1 + 3] = Tile::HArch;
+	if (verticalLayout) {
+		for (int i = start.y; i < start.y + length; i++) {
+			dungeon[start.x][i] = VArch;
+			dungeon[start.x + 3][i] = VArch;
 		}
-		return;
-	}
-
-	for (int i = y1; i < y2; i++) {
-		dungeon[x1][i] = Tile::VArch;
-		dungeon[x1 + 3][i] = Tile::VArch;
+	} else {
+		for (int i = start.x; i < start.x + length; i++) {
+			dungeon[i][start.y] = HArch;
+			dungeon[i][start.y + 3] = HArch;
+		}
 	}
 }
 
@@ -1340,22 +832,22 @@ void FixTilesPatterns()
 	for (int j = 0; j < DMAXY; j++) {
 		for (int i = 0; i < DMAXX; i++) {
 			if (i + 1 < DMAXX) {
-				if (dungeon[i][j] == 2 && dungeon[i + 1][j] == 22)
-					dungeon[i + 1][j] = 23;
-				if (dungeon[i][j] == 13 && dungeon[i + 1][j] == 22)
-					dungeon[i + 1][j] = 18;
-				if (dungeon[i][j] == 13 && dungeon[i + 1][j] == 2)
-					dungeon[i + 1][j] = 7;
-				if (dungeon[i][j] == 6 && dungeon[i + 1][j] == 22)
-					dungeon[i + 1][j] = 24;
+				if (dungeon[i][j] == HWall && dungeon[i + 1][j] == Dirt)
+					dungeon[i + 1][j] = DirtHwallEnd;
+				if (dungeon[i][j] == Floor && dungeon[i + 1][j] == Dirt)
+					dungeon[i + 1][j] = DirtHwall;
+				if (dungeon[i][j] == Floor && dungeon[i + 1][j] == HWall)
+					dungeon[i + 1][j] = HWallEnd;
+				if (dungeon[i][j] == VWallEnd && dungeon[i + 1][j] == Dirt)
+					dungeon[i + 1][j] = DirtVwallEnd;
 			}
 			if (j + 1 < DMAXY) {
-				if (dungeon[i][j] == 1 && dungeon[i][j + 1] == 22)
-					dungeon[i][j + 1] = 24;
-				if (dungeon[i][j] == 13 && dungeon[i][j + 1] == 1)
-					dungeon[i][j + 1] = 6;
-				if (dungeon[i][j] == 13 && dungeon[i][j + 1] == 22)
-					dungeon[i][j + 1] = 19;
+				if (dungeon[i][j] == VWall && dungeon[i][j + 1] == Dirt)
+					dungeon[i][j + 1] = DirtVwallEnd;
+				if (dungeon[i][j] == Floor && dungeon[i][j + 1] == VWall)
+					dungeon[i][j + 1] = VWallEnd;
+				if (dungeon[i][j] == Floor && dungeon[i][j + 1] == Dirt)
+					dungeon[i][j + 1] = DirtVwall;
 			}
 		}
 	}
@@ -1363,92 +855,92 @@ void FixTilesPatterns()
 	for (int j = 0; j < DMAXY; j++) {
 		for (int i = 0; i < DMAXX; i++) {
 			if (i + 1 < DMAXX) {
-				if (dungeon[i][j] == 13 && dungeon[i + 1][j] == 19)
-					dungeon[i + 1][j] = 21;
-				if (dungeon[i][j] == 13 && dungeon[i + 1][j] == 22)
-					dungeon[i + 1][j] = 20;
-				if (dungeon[i][j] == 7 && dungeon[i + 1][j] == 22)
-					dungeon[i + 1][j] = 23;
-				if (dungeon[i][j] == 13 && dungeon[i + 1][j] == 24)
-					dungeon[i + 1][j] = 21;
-				if (dungeon[i][j] == 19 && dungeon[i + 1][j] == 22)
-					dungeon[i + 1][j] = 20;
-				if (dungeon[i][j] == 2 && dungeon[i + 1][j] == 19)
-					dungeon[i + 1][j] = 21;
-				if (dungeon[i][j] == 19 && dungeon[i + 1][j] == 1)
-					dungeon[i + 1][j] = 6;
-				if (dungeon[i][j] == 7 && dungeon[i + 1][j] == 19)
-					dungeon[i + 1][j] = 21;
-				if (dungeon[i][j] == 2 && dungeon[i + 1][j] == 1)
-					dungeon[i + 1][j] = 6;
-				if (dungeon[i][j] == 3 && dungeon[i + 1][j] == 22)
-					dungeon[i + 1][j] = 24;
-				if (dungeon[i][j] == 21 && dungeon[i + 1][j] == 1)
-					dungeon[i + 1][j] = 6;
-				if (dungeon[i][j] == 7 && dungeon[i + 1][j] == 1)
-					dungeon[i + 1][j] = 6;
-				if (dungeon[i][j] == 7 && dungeon[i + 1][j] == 24)
-					dungeon[i + 1][j] = 21;
-				if (dungeon[i][j] == 4 && dungeon[i + 1][j] == 16)
-					dungeon[i + 1][j] = 17;
-				if (dungeon[i][j] == 7 && dungeon[i + 1][j] == 13)
-					dungeon[i + 1][j] = 17;
-				if (dungeon[i][j] == 2 && dungeon[i + 1][j] == 24)
-					dungeon[i + 1][j] = 21;
-				if (dungeon[i][j] == 2 && dungeon[i + 1][j] == 13)
-					dungeon[i + 1][j] = 17;
+				if (dungeon[i][j] == Floor && dungeon[i + 1][j] == DirtVwall)
+					dungeon[i + 1][j] = HDirtCorner;
+				if (dungeon[i][j] == Floor && dungeon[i + 1][j] == Dirt)
+					dungeon[i + 1][j] = VDirtCorner;
+				if (dungeon[i][j] == HWallEnd && dungeon[i + 1][j] == Dirt)
+					dungeon[i + 1][j] = DirtHwallEnd;
+				if (dungeon[i][j] == Floor && dungeon[i + 1][j] == DirtVwallEnd)
+					dungeon[i + 1][j] = HDirtCorner;
+				if (dungeon[i][j] == DirtVwall && dungeon[i + 1][j] == Dirt)
+					dungeon[i + 1][j] = VDirtCorner;
+				if (dungeon[i][j] == HWall && dungeon[i + 1][j] == DirtVwall)
+					dungeon[i + 1][j] = HDirtCorner;
+				if (dungeon[i][j] == DirtVwall && dungeon[i + 1][j] == VWall)
+					dungeon[i + 1][j] = VWallEnd;
+				if (dungeon[i][j] == HWallEnd && dungeon[i + 1][j] == DirtVwall)
+					dungeon[i + 1][j] = HDirtCorner;
+				if (dungeon[i][j] == HWall && dungeon[i + 1][j] == VWall)
+					dungeon[i + 1][j] = VWallEnd;
+				if (dungeon[i][j] == Corner && dungeon[i + 1][j] == Dirt)
+					dungeon[i + 1][j] = DirtVwallEnd;
+				if (dungeon[i][j] == HDirtCorner && dungeon[i + 1][j] == VWall)
+					dungeon[i + 1][j] = VWallEnd;
+				if (dungeon[i][j] == HWallEnd && dungeon[i + 1][j] == VWall)
+					dungeon[i + 1][j] = VWallEnd;
+				if (dungeon[i][j] == HWallEnd && dungeon[i + 1][j] == DirtVwallEnd)
+					dungeon[i + 1][j] = HDirtCorner;
+				if (dungeon[i][j] == DWall && dungeon[i + 1][j] == VCorner)
+					dungeon[i + 1][j] = HCorner;
+				if (dungeon[i][j] == HWallEnd && dungeon[i + 1][j] == Floor)
+					dungeon[i + 1][j] = HCorner;
+				if (dungeon[i][j] == HWall && dungeon[i + 1][j] == DirtVwallEnd)
+					dungeon[i + 1][j] = HDirtCorner;
+				if (dungeon[i][j] == HWall && dungeon[i + 1][j] == Floor)
+					dungeon[i + 1][j] = HCorner;
 			}
 			if (i > 0) {
-				if (dungeon[i][j] == 23 && dungeon[i - 1][j] == 22)
-					dungeon[i - 1][j] = 19;
-				if (dungeon[i][j] == 19 && dungeon[i - 1][j] == 23)
-					dungeon[i - 1][j] = 21;
-				if (dungeon[i][j] == 6 && dungeon[i - 1][j] == 22)
-					dungeon[i - 1][j] = 24;
-				if (dungeon[i][j] == 6 && dungeon[i - 1][j] == 23)
-					dungeon[i - 1][j] = 21;
+				if (dungeon[i][j] == DirtHwallEnd && dungeon[i - 1][j] == Dirt)
+					dungeon[i - 1][j] = DirtVwall;
+				if (dungeon[i][j] == DirtVwall && dungeon[i - 1][j] == DirtHwallEnd)
+					dungeon[i - 1][j] = HDirtCorner;
+				if (dungeon[i][j] == VWallEnd && dungeon[i - 1][j] == Dirt)
+					dungeon[i - 1][j] = DirtVwallEnd;
+				if (dungeon[i][j] == VWallEnd && dungeon[i - 1][j] == DirtHwallEnd)
+					dungeon[i - 1][j] = HDirtCorner;
 			}
 			if (j + 1 < DMAXY) {
-				if (dungeon[i][j] == 1 && dungeon[i][j + 1] == 2)
-					dungeon[i][j + 1] = 7;
-				if (dungeon[i][j] == 6 && dungeon[i][j + 1] == 18)
-					dungeon[i][j + 1] = 21;
-				if (dungeon[i][j] == 18 && dungeon[i][j + 1] == 2)
-					dungeon[i][j + 1] = 7;
-				if (dungeon[i][j] == 6 && dungeon[i][j + 1] == 2)
-					dungeon[i][j + 1] = 7;
-				if (dungeon[i][j] == 21 && dungeon[i][j + 1] == 2)
-					dungeon[i][j + 1] = 7;
-				if (dungeon[i][j] == 6 && dungeon[i][j + 1] == 22)
-					dungeon[i][j + 1] = 24;
-				if (dungeon[i][j] == 6 && dungeon[i][j + 1] == 13)
-					dungeon[i][j + 1] = 16;
-				if (dungeon[i][j] == 1 && dungeon[i][j + 1] == 13)
-					dungeon[i][j + 1] = 16;
-				if (dungeon[i][j] == 13 && dungeon[i][j + 1] == 16)
-					dungeon[i][j + 1] = 17;
+				if (dungeon[i][j] == VWall && dungeon[i][j + 1] == HWall)
+					dungeon[i][j + 1] = HWallEnd;
+				if (dungeon[i][j] == VWallEnd && dungeon[i][j + 1] == DirtHwall)
+					dungeon[i][j + 1] = HDirtCorner;
+				if (dungeon[i][j] == DirtHwall && dungeon[i][j + 1] == HWall)
+					dungeon[i][j + 1] = HWallEnd;
+				if (dungeon[i][j] == VWallEnd && dungeon[i][j + 1] == HWall)
+					dungeon[i][j + 1] = HWallEnd;
+				if (dungeon[i][j] == HDirtCorner && dungeon[i][j + 1] == HWall)
+					dungeon[i][j + 1] = HWallEnd;
+				if (dungeon[i][j] == VWallEnd && dungeon[i][j + 1] == Dirt)
+					dungeon[i][j + 1] = DirtVwallEnd;
+				if (dungeon[i][j] == VWallEnd && dungeon[i][j + 1] == Floor)
+					dungeon[i][j + 1] = VCorner;
+				if (dungeon[i][j] == VWall && dungeon[i][j + 1] == Floor)
+					dungeon[i][j + 1] = VCorner;
+				if (dungeon[i][j] == Floor && dungeon[i][j + 1] == VCorner)
+					dungeon[i][j + 1] = HCorner;
 			}
 			if (j > 0) {
-				if (dungeon[i][j] == 6 && dungeon[i][j - 1] == 22)
-					dungeon[i][j - 1] = 7;
-				if (dungeon[i][j] == 6 && dungeon[i][j - 1] == 22)
-					dungeon[i][j - 1] = 24;
-				if (dungeon[i][j] == 7 && dungeon[i][j - 1] == 24)
-					dungeon[i][j - 1] = 21;
-				if (dungeon[i][j] == 18 && dungeon[i][j - 1] == 24)
-					dungeon[i][j - 1] = 21;
+				if (dungeon[i][j] == VWallEnd && dungeon[i][j - 1] == Dirt)
+					dungeon[i][j - 1] = HWallEnd;
+				if (dungeon[i][j] == VWallEnd && dungeon[i][j - 1] == Dirt)
+					dungeon[i][j - 1] = DirtVwallEnd;
+				if (dungeon[i][j] == HWallEnd && dungeon[i][j - 1] == DirtVwallEnd)
+					dungeon[i][j - 1] = HDirtCorner;
+				if (dungeon[i][j] == DirtHwall && dungeon[i][j - 1] == DirtVwallEnd)
+					dungeon[i][j - 1] = HDirtCorner;
 			}
 		}
 	}
 
 	for (int j = 0; j < DMAXY; j++) {
 		for (int i = 0; i < DMAXX; i++) {
-			if (j + 1 < DMAXY && dungeon[i][j] == 4 && dungeon[i][j + 1] == 2)
-				dungeon[i][j + 1] = 7;
-			if (i + 1 < DMAXX && dungeon[i][j] == 2 && dungeon[i + 1][j] == 19)
-				dungeon[i + 1][j] = 21;
-			if (j + 1 < DMAXY && dungeon[i][j] == 18 && dungeon[i][j + 1] == 22)
-				dungeon[i][j + 1] = 20;
+			if (j + 1 < DMAXY && dungeon[i][j] == DWall && dungeon[i][j + 1] == HWall)
+				dungeon[i][j + 1] = HWallEnd;
+			if (i + 1 < DMAXX && dungeon[i][j] == HWall && dungeon[i + 1][j] == DirtVwall)
+				dungeon[i + 1][j] = HDirtCorner;
+			if (j + 1 < DMAXY && dungeon[i][j] == DirtHwall && dungeon[i][j + 1] == Dirt)
+				dungeon[i][j + 1] = VDirtCorner;
 		}
 	}
 }
@@ -1457,34 +949,34 @@ void Substitution()
 {
 	for (int y = 0; y < DMAXY; y++) {
 		for (int x = 0; x < DMAXX; x++) {
-			if (GenerateRnd(4) == 0) {
-				uint8_t c = L5BTYPES[dungeon[x][y]];
+			if (FlipCoin(4)) {
+				uint8_t c = TileDecorations[dungeon[x][y]];
 				if (c != 0 && !Protected.test(x, y)) {
 					int rv = GenerateRnd(16);
 					int i = -1;
 					while (rv >= 0) {
 						i++;
-						if (i == sizeof(L5BTYPES)) {
+						if (i == sizeof(TileDecorations)) {
 							i = 0;
 						}
-						if (c == L5BTYPES[i]) {
+						if (c == TileDecorations[i]) {
 							rv--;
 						}
 					}
 
 					// BUGFIX: Add `&& y > 0` to the if statement. (fixed)
-					if (i == 89 && y > 0) {
-						if (L5BTYPES[dungeon[x][y - 1]] != 79 || Protected.test(x, y - 1))
-							i = 79;
+					if (i == VWall4 && y > 0) {
+						if (TileDecorations[dungeon[x][y - 1]] != VWall2 || Protected.test(x, y - 1))
+							i = VWall2;
 						else
-							dungeon[x][y - 1] = 90;
+							dungeon[x][y - 1] = VWall5;
 					}
 					// BUGFIX: Add `&& x + 1 < DMAXX` to the if statement. (fixed)
-					if (i == 91 && x + 1 < DMAXX) {
-						if (L5BTYPES[dungeon[x + 1][y]] != 80 || Protected.test(x + 1, y))
-							i = 80;
+					if (i == HWall4 && x + 1 < DMAXX) {
+						if (TileDecorations[dungeon[x + 1][y]] != HWall2 || Protected.test(x + 1, y))
+							i = HWall2;
 						else
-							dungeon[x + 1][y] = 92;
+							dungeon[x + 1][y] = HWall5;
 					}
 					dungeon[x][y] = i;
 				}
@@ -1493,91 +985,33 @@ void Substitution()
 	}
 }
 
-Point SelectChamber()
-{
-	int chamber;
-	if (!HasChamber1)
-		chamber = FlipCoin() ? 3 : 2;
-	else if (!HasChamber2)
-		chamber = FlipCoin() ? 1 : 3;
-	else if (!HasChamber3)
-		chamber = FlipCoin() ? 1 : 2;
-	else
-		chamber = GenerateRnd(3) + 1;
-
-	switch (chamber) {
-	case 1:
-		return VerticalLayout ? Point { 16, 2 } : Point { 2, 16 };
-	case 3:
-		return VerticalLayout ? Point { 16, 30 } : Point { 30, 16 };
-	default:
-		return { 16, 16 };
-	}
-}
-
-void SetCryptRoom()
-{
-	Point position = SelectChamber();
-
-	UberRow = 2 * position.x + 6;
-	UberCol = 2 * position.y + 8;
-	IsUberRoomOpened = false;
-	IsUberLeverActivated = false;
-
-	SetPiece = { position, UberRoomPattern.size };
-
-	UberRoomPattern.place(position, true);
-}
-
-void SetCornerRoom()
-{
-	Point position = SelectChamber();
-
-	SetPiece = { position, CornerstoneRoomPattern.size };
-
-	CornerstoneRoomPattern.place(position, true);
-}
-
 void FillChambers()
 {
-	if (!VerticalLayout) {
+	Point chamber1 { 0, 14 };
+	Point chamber3 { 28, 14 };
+	Point hall1 { 12, 18 };
+	Point hall2 { 26, 18 };
+	if (VerticalLayout) {
+		std::swap(chamber1.x, chamber1.y);
+		std::swap(chamber3.x, chamber3.y);
+		std::swap(hall1.x, hall1.y);
+		std::swap(hall2.x, hall2.y);
+	}
+
+	if (HasChamber1)
+		GenerateChamber(chamber1, false, true, VerticalLayout);
+	if (HasChamber2)
+		GenerateChamber({ 14, 14 }, HasChamber1, HasChamber3, VerticalLayout);
+	if (HasChamber3)
+		GenerateChamber(chamber3, true, false, VerticalLayout);
+
+	if (HasChamber2) {
 		if (HasChamber1)
-			GenerateChamber(0, 14, false, false, false, true);
-
-		if (!HasChamber3)
-			GenerateChamber(14, 14, false, false, true, false);
-		else if (!HasChamber1)
-			GenerateChamber(14, 14, false, false, false, true);
-		else if (HasChamber1 && HasChamber2 && HasChamber3)
-			GenerateChamber(14, 14, false, false, true, true);
-
+			GenerateHall(hall1, 2, VerticalLayout);
 		if (HasChamber3)
-			GenerateChamber(28, 14, false, false, true, false);
-		if (HasChamber1 && HasChamber2)
-			GenerateHall(12, 18, 14, 18);
-		if (HasChamber2 && HasChamber3)
-			GenerateHall(26, 18, 28, 18);
-		if (!HasChamber2)
-			GenerateHall(12, 18, 28, 18);
+			GenerateHall(hall2, 2, VerticalLayout);
 	} else {
-		if (HasChamber1)
-			GenerateChamber(14, 0, false, true, false, false);
-
-		if (!HasChamber3)
-			GenerateChamber(14, 14, true, false, false, false);
-		else if (!HasChamber1)
-			GenerateChamber(14, 14, false, true, false, false);
-		else if (HasChamber1 && HasChamber2 && HasChamber3)
-			GenerateChamber(14, 14, true, true, false, false);
-
-		if (HasChamber3)
-			GenerateChamber(14, 28, true, false, false, false);
-		if (HasChamber1 && HasChamber2)
-			GenerateHall(18, 12, 18, 14);
-		if (HasChamber2 && HasChamber3)
-			GenerateHall(18, 26, 18, 28);
-		if (!HasChamber2)
-			GenerateHall(18, 12, 18, 28);
+		GenerateHall(hall1, 16, VerticalLayout);
 	}
 
 	if (leveltype == DTYPE_CRYPT) {
@@ -1587,7 +1021,7 @@ void FillChambers()
 			SetCornerRoom();
 		}
 	} else if (pSetPiece != nullptr) {
-		SetSetPieceRoom(SelectChamber(), Tile::Floor);
+		SetSetPieceRoom(SelectChamber(), Floor);
 	}
 }
 
@@ -1598,24 +1032,24 @@ void FixTransparency()
 		int xx = 16;
 		for (int i = 0; i < DMAXX; i++) {
 			// BUGFIX: Should check for `j > 0` first. (fixed)
-			if (dungeon[i][j] == 23 && j > 0 && dungeon[i][j - 1] == 18) {
+			if (dungeon[i][j] == DirtHwallEnd && j > 0 && dungeon[i][j - 1] == DirtHwall) {
 				dTransVal[xx + 1][yy] = dTransVal[xx][yy];
 				dTransVal[xx + 1][yy + 1] = dTransVal[xx][yy];
 			}
 			// BUGFIX: Should check for `i + 1 < DMAXY` first. (fixed)
-			if (dungeon[i][j] == 24 && i + 1 < DMAXY && dungeon[i + 1][j] == 19) {
+			if (dungeon[i][j] == DirtVwallEnd && i + 1 < DMAXY && dungeon[i + 1][j] == DirtVwall) {
 				dTransVal[xx][yy + 1] = dTransVal[xx][yy];
 				dTransVal[xx + 1][yy + 1] = dTransVal[xx][yy];
 			}
-			if (dungeon[i][j] == 18) {
+			if (dungeon[i][j] == DirtHwall) {
 				dTransVal[xx + 1][yy] = dTransVal[xx][yy];
 				dTransVal[xx + 1][yy + 1] = dTransVal[xx][yy];
 			}
-			if (dungeon[i][j] == 19) {
+			if (dungeon[i][j] == DirtVwall) {
 				dTransVal[xx][yy + 1] = dTransVal[xx][yy];
 				dTransVal[xx + 1][yy + 1] = dTransVal[xx][yy];
 			}
-			if (dungeon[i][j] == 20) {
+			if (dungeon[i][j] == VDirtCorner) {
 				dTransVal[xx + 1][yy] = dTransVal[xx][yy];
 				dTransVal[xx][yy + 1] = dTransVal[xx][yy];
 				dTransVal[xx + 1][yy + 1] = dTransVal[xx][yy];
@@ -1630,42 +1064,24 @@ void FixDirtTiles()
 {
 	for (int j = 0; j < DMAXY - 1; j++) {
 		for (int i = 0; i < DMAXX - 1; i++) {
-			if (dungeon[i][j] == 21 && dungeon[i + 1][j] != 19) {
-				dungeon[i][j] = 202;
+			if (dungeon[i][j] == HDirtCorner && dungeon[i + 1][j] != DirtVwall) {
+				dungeon[i][j] = DirtCorner2;
 			}
-			if (dungeon[i][j] == 19 && dungeon[i + 1][j] != 19) {
-				dungeon[i][j] = 200;
+			if (dungeon[i][j] == DirtVwall && dungeon[i + 1][j] != DirtVwall) {
+				dungeon[i][j] = DirtVWall2;
 			}
-			if (dungeon[i][j] == 24 && dungeon[i + 1][j] != 19) {
-				dungeon[i][j] = 205;
+			if (dungeon[i][j] == DirtVwallEnd && dungeon[i + 1][j] != DirtVwall) {
+				dungeon[i][j] = DirtVWallEnd2;
 			}
-			if (dungeon[i][j] == 18 && dungeon[i][j + 1] != 18) {
-				dungeon[i][j] = 199;
+			if (dungeon[i][j] == DirtHwall && dungeon[i][j + 1] != DirtHwall) {
+				dungeon[i][j] = DirtHWall2;
 			}
-			if (dungeon[i][j] == 21 && dungeon[i][j + 1] != 18) {
-				dungeon[i][j] = 202;
+			if (dungeon[i][j] == HDirtCorner && dungeon[i][j + 1] != DirtHwall) {
+				dungeon[i][j] = DirtCorner2;
 			}
-			if (dungeon[i][j] == 23 && dungeon[i][j + 1] != 18) {
-				dungeon[i][j] = 204;
+			if (dungeon[i][j] == DirtHwallEnd && dungeon[i][j + 1] != DirtHwall) {
+				dungeon[i][j] = DirtHWallEnd2;
 			}
-		}
-	}
-}
-
-void FixCryptDirtTiles()
-{
-	for (int j = 0; j < DMAXY - 1; j++) {
-		for (int i = 0; i < DMAXX - 1; i++) {
-			if (dungeon[i][j] == 19)
-				dungeon[i][j] = 83;
-			if (dungeon[i][j] == 21)
-				dungeon[i][j] = 85;
-			if (dungeon[i][j] == 23)
-				dungeon[i][j] = 87;
-			if (dungeon[i][j] == 24)
-				dungeon[i][j] = 88;
-			if (dungeon[i][j] == 18)
-				dungeon[i][j] = 82;
 		}
 	}
 }
@@ -1674,144 +1090,15 @@ void FixCornerTiles()
 {
 	for (int j = 1; j < DMAXY - 1; j++) {
 		for (int i = 1; i < DMAXX - 1; i++) {
-			if (!Protected.test(i, j) && dungeon[i][j] == 17 && dungeon[i - 1][j] == Tile::Floor && dungeon[i][j - 1] == Tile::VWall) {
-				dungeon[i][j] = 16;
+			if (!Protected.test(i, j) && dungeon[i][j] == HCorner && dungeon[i - 1][j] == Floor && dungeon[i][j - 1] == VWall) {
+				dungeon[i][j] = VCorner;
 				// BUGFIX: Set tile as Protected
 			}
-			if (dungeon[i][j] == 202 && dungeon[i + 1][j] == Tile::Floor && dungeon[i][j + 1] == Tile::VWall) {
-				dungeon[i][j] = 8;
+			if (dungeon[i][j] == DirtCorner2 && dungeon[i + 1][j] == Floor && dungeon[i][j + 1] == VWall) {
+				dungeon[i][j] = HArchEnd;
 			}
 		}
 	}
-}
-
-void CryptStatues(int rndper)
-{
-	PlaceMiniSetRandom1x1(Tile::VWall, CryptTile::VDemon, rndper);
-	PlaceMiniSetRandom1x1(Tile::VWall, CryptTile::VSuccubus, rndper);
-	PlaceMiniSetRandom1x1(Tile::HWall, CryptTile::HDemon, rndper);
-	PlaceMiniSetRandom1x1(Tile::HWall, CryptTile::HSuccubus, rndper);
-}
-
-void CryptCracked(int rndper)
-{
-	// clang-format off
-	PlaceMiniSetRandom1x1(Tile::VWall,      CryptTile::VWall2,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HWall,      CryptTile::HWall2,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Corner,     CryptTile::Corner2,     rndper);
-	PlaceMiniSetRandom1x1(Tile::DWall,      CryptTile::DWall2,      rndper);
-	PlaceMiniSetRandom1x1(Tile::DArch,      CryptTile::DArch2,      rndper);
-	PlaceMiniSetRandom1x1(Tile::VWallEnd,   CryptTile::VWallEnd2,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HWallEnd,   CryptTile::HWallEnd2,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HArchEnd,   CryptTile::HArchEnd2,   rndper);
-	PlaceMiniSetRandom1x1(Tile::VArchEnd,   CryptTile::VArchEnd2,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HArchVWall, CryptTile::HArchVWall2, rndper);
-	PlaceMiniSetRandom1x1(Tile::VArch,      CryptTile::VArch2,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HArch,      CryptTile::HArch2,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor,      CryptTile::Floor2,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HWallVArch, CryptTile::HWallVArch2, rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar,      CryptTile::Pillar3,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar1,     CryptTile::Pillar4,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar2,     CryptTile::Pillar5,      rndper);
-	// clang-format on
-}
-
-void CryptBroken(int rndper)
-{
-	// clang-format off
-	PlaceMiniSetRandom1x1(Tile::VWall,      CryptTile::VWall3,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HWall,      CryptTile::HWall3,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Corner,     CryptTile::Corner3,     rndper);
-	PlaceMiniSetRandom1x1(Tile::DWall,      CryptTile::DWall3,      rndper);
-	PlaceMiniSetRandom1x1(Tile::DArch,      CryptTile::DArch3,      rndper);
-	PlaceMiniSetRandom1x1(Tile::VWallEnd,   CryptTile::VWallEnd3,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HWallEnd,   CryptTile::HWallEnd3,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HArchEnd,   CryptTile::HArchEnd3,   rndper);
-	PlaceMiniSetRandom1x1(Tile::VArchEnd,   CryptTile::VArchEnd3,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HArchVWall, CryptTile::HArchVWall3, rndper);
-	PlaceMiniSetRandom1x1(Tile::VArch,      CryptTile::VArch3,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HArch,      CryptTile::HArch3,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor,      CryptTile::Floor3,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HWallVArch, CryptTile::HWallVArch3, rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar,      CryptTile::Pillar6,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar1,     CryptTile::Pillar7,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar2,     CryptTile::Pillar8,      rndper);
-	// clang-format on
-}
-
-void CryptLeaking(int rndper)
-{
-	// clang-format off
-	PlaceMiniSetRandom1x1(Tile::VWall,      CryptTile::VWall4,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HWall,      CryptTile::HWall4,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Corner,     CryptTile::Corner4,     rndper);
-	PlaceMiniSetRandom1x1(Tile::DWall,      CryptTile::DWall4,      rndper);
-	PlaceMiniSetRandom1x1(Tile::DArch,      CryptTile::DArch4,      rndper);
-	PlaceMiniSetRandom1x1(Tile::VWallEnd,   CryptTile::VWallEnd4,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HWallEnd,   CryptTile::HWallEnd4,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HArchEnd,   CryptTile::HArchEnd4,   rndper);
-	PlaceMiniSetRandom1x1(Tile::VArchEnd,   CryptTile::VArchEnd4,   rndper);
-	PlaceMiniSetRandom1x1(Tile::HArchVWall, CryptTile::HArchVWall4, rndper);
-	PlaceMiniSetRandom1x1(Tile::VArch,      CryptTile::VArch4,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HArch,      CryptTile::HArch4,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor,      CryptTile::Floor4,      rndper);
-	PlaceMiniSetRandom1x1(Tile::HWallVArch, CryptTile::HWallVArch4, rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar,      CryptTile::Pillar9,      rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar1,     CryptTile::Pillar10,     rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar2,     CryptTile::Pillar11,     rndper);
-	// clang-format on
-}
-
-void CryptSubstitions1(int rndper)
-{
-	PlaceMiniSetRandom1x1(Tile::VArch, CryptTile::VArch6, rndper);
-	PlaceMiniSetRandom1x1(Tile::HArch, CryptTile::HArch6, rndper);
-	PlaceMiniSetRandom1x1(Tile::VArch, CryptTile::VArch7, rndper);
-	PlaceMiniSetRandom1x1(Tile::HArch, CryptTile::HArch7, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::VWall5, CryptTile::VWall8, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::VWall5, CryptTile::VWall9, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::VWall6, CryptTile::VWall10, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::VWall6, CryptTile::VWall11, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::VWall7, CryptTile::VWall12, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::VWall7, CryptTile::VWall13, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::HWall5, CryptTile::HWall8, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::HWall5, CryptTile::HWall9, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::HWall5, CryptTile::HWall10, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::HWall5, CryptTile::HWall11, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::HWall5, CryptTile::HWall12, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::HWall5, CryptTile::HWall13, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor7, CryptTile::Floor15, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor7, CryptTile::Floor16, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor6, CryptTile::Floor17, rndper);
-	PlaceMiniSetRandom1x1(Tile::Pillar, CryptTile::Pillar12, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor8, CryptTile::Floor18, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor8, CryptTile::Floor19, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor9, CryptTile::Floor20, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor10, CryptTile::Floor21, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor10, CryptTile::Floor22, rndper);
-	PlaceMiniSetRandom1x1(CryptTile::Floor10, CryptTile::Floor23, rndper);
-}
-
-void CryptSubstitions2(int rndper)
-{
-	PlaceMiniSetRandom(CryptPillar1, rndper);
-	PlaceMiniSetRandom(CryptPillar2, rndper);
-	PlaceMiniSetRandom(CryptPillar3, rndper);
-	PlaceMiniSetRandom(CryptPillar4, rndper);
-	PlaceMiniSetRandom(CryptPillar5, rndper);
-	PlaceMiniSetRandom(CryptStar, rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor, CryptTile::Floor11, rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor, CryptTile::Floor12, rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor, CryptTile::Floor13, rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor, CryptTile::Floor14, rndper);
-}
-
-void CryptFloor(int rndper)
-{
-	PlaceMiniSetRandom1x1(Tile::Floor, CryptTile::Floor6, rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor, CryptTile::Floor7, rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor, CryptTile::Floor8, rndper);
-	PlaceMiniSetRandom1x1(Tile::Floor, CryptTile::Floor9, rndper);
 }
 
 bool PlaceCathedralStairs(lvl_entry entry)
@@ -1862,31 +1149,6 @@ bool PlaceCathedralStairs(lvl_entry entry)
 	return success;
 }
 
-bool PlaceCryptStairs(lvl_entry entry)
-{
-	bool success = true;
-	std::optional<Point> position;
-
-	// Place stairs up
-	position = PlaceMiniSet(currlevel != 21 ? L5STAIRSUPHF : L5STAIRSTOWN, DMAXX * DMAXY, true);
-	if (!position) {
-		success = false;
-	} else if (entry == ENTRY_MAIN || entry == ENTRY_TWARPDN) {
-		ViewPosition = position->megaToWorld() + Displacement { 3, 5 };
-	}
-
-	// Place stairs down
-	if (currlevel != 24) {
-		position = PlaceMiniSet(L5STAIRSDOWN, DMAXX * DMAXY, true);
-		if (!position)
-			success = false;
-		else if (entry == ENTRY_PREV)
-			ViewPosition = position->megaToWorld() + Displacement { 3, 7 };
-	}
-
-	return success;
-}
-
 bool PlaceStairs(lvl_entry entry)
 {
 	if (leveltype == DTYPE_CRYPT) {
@@ -1916,11 +1178,10 @@ void GenerateLevel(lvl_entry entry)
 		DRLG_InitTrans();
 
 		do {
-			InitDungeonFlags();
 			FirstRoom();
 		} while (FindArea() < minarea);
 
-		MakeDungeon();
+		InitDungeonFlags();
 		MakeDmt();
 		FillChambers();
 		FixTilesPatterns();
@@ -1934,7 +1195,7 @@ void GenerateLevel(lvl_entry entry)
 
 	for (int j = 0; j < DMAXY; j++) {
 		for (int i = 0; i < DMAXX; i++) {
-			if (dungeon[i][j] == Tile::EntranceStairs) {
+			if (dungeon[i][j] == EntranceStairs) {
 				int xx = 2 * i + 16; /* todo: fix loop */
 				int yy = 2 * j + 16;
 				DRLG_CopyTrans(xx, yy + 1, xx, yy);
@@ -1952,51 +1213,7 @@ void GenerateLevel(lvl_entry entry)
 	FixCornerTiles();
 
 	if (leveltype == DTYPE_CRYPT) {
-		CryptStatues(10);
-		PlaceMiniSetRandom1x1(Tile::VArch, CryptTile::VArch5, 95);
-		PlaceMiniSetRandom1x1(Tile::HArch, CryptTile::HArch5, 95);
-		PlaceMiniSetRandom(VWallSection, 100);
-		PlaceMiniSetRandom(HWallSection, 100);
-		PlaceMiniSetRandom(CryptFloorLave, 60);
-		ApplyCryptShadowsPatterns();
-		switch (currlevel) {
-		case 21:
-			CryptCracked(30);
-			CryptBroken(15);
-			CryptLeaking(5);
-			ApplyCryptShadowsPatterns();
-			CryptFloor(10);
-			CryptSubstitions1(5);
-			CryptSubstitions2(20);
-			break;
-		case 22:
-			CryptFloor(10);
-			CryptSubstitions1(10);
-			CryptSubstitions2(20);
-			CryptCracked(30);
-			CryptBroken(20);
-			CryptLeaking(10);
-			ApplyCryptShadowsPatterns();
-			break;
-		case 23:
-			CryptFloor(10);
-			CryptSubstitions1(15);
-			CryptSubstitions2(30);
-			CryptCracked(30);
-			CryptBroken(20);
-			CryptLeaking(15);
-			ApplyCryptShadowsPatterns();
-			break;
-		default:
-			CryptFloor(10);
-			CryptSubstitions1(20);
-			CryptSubstitions2(30);
-			CryptCracked(30);
-			CryptBroken(20);
-			CryptLeaking(20);
-			ApplyCryptShadowsPatterns();
-			break;
-		}
+		CryptSubstitution();
 	} else {
 		Substitution();
 		ApplyShadowsPatterns();
@@ -2016,7 +1233,7 @@ void GenerateLevel(lvl_entry entry)
 
 void Pass3()
 {
-	DRLG_LPass3(22 - 1);
+	DRLG_LPass3(Dirt - 1);
 
 	if (leveltype == DTYPE_CRYPT)
 		InitCryptPieces();
@@ -2025,6 +1242,46 @@ void Pass3()
 }
 
 } // namespace
+
+void PlaceMiniSetRandom(const Miniset &miniset, int rndper)
+{
+	int sw = miniset.size.width;
+	int sh = miniset.size.height;
+
+	for (int sy = 0; sy < DMAXY - sh; sy++) {
+		for (int sx = 0; sx < DMAXX - sw; sx++) {
+			if (!miniset.matches({ sx, sy }, false))
+				continue;
+			if (!CanReplaceTile(miniset.replace[0][0], { sx, sy }))
+				continue;
+			if (GenerateRnd(100) >= rndper)
+				continue;
+			miniset.place({ sx, sy });
+		}
+	}
+}
+
+Point SelectChamber()
+{
+	int chamber;
+	if (!HasChamber1)
+		chamber = PickRandomlyAmong({ 2, 3 });
+	else if (!HasChamber2)
+		chamber = PickRandomlyAmong({ 3, 1 });
+	else if (!HasChamber3)
+		chamber = PickRandomlyAmong({ 2, 1 });
+	else
+		chamber = GenerateRnd(3) + 1;
+
+	switch (chamber) {
+	case 1:
+		return VerticalLayout ? Point { 16, 2 } : Point { 2, 16 };
+	case 3:
+		return VerticalLayout ? Point { 16, 30 } : Point { 30, 16 };
+	default:
+		return { 16, 16 };
+	}
+}
 
 void CreateL5Dungeon(uint32_t rseed, lvl_entry entry)
 {
@@ -2038,26 +1295,16 @@ void CreateL5Dungeon(uint32_t rseed, lvl_entry entry)
 	Pass3();
 
 	if (leveltype == DTYPE_CRYPT) {
-		for (int j = dminPosition.y; j < dmaxPosition.y; j++) {
-			for (int i = dminPosition.x; i < dmaxPosition.x; i++) {
-				if (dPiece[i][j] == 289) {
-					UberRow = i;
-					UberCol = j;
-				}
-				if (dPiece[i][j] == 316) {
-					CornerStone.position = { i, j };
-				}
-			}
-		}
+		SetCryptSetPieceRoom();
 	}
 }
 
 void LoadPreL1Dungeon(const char *path)
 {
-	memset(dungeon, 22, sizeof(dungeon));
+	memset(dungeon, Dirt, sizeof(dungeon));
 
 	auto dunData = LoadFileInMem<uint16_t>(path);
-	PlaceDunTiles(dunData.get(), { 0, 0 }, Tile::Floor);
+	PlaceDunTiles(dunData.get(), { 0, 0 }, Floor);
 
 	if (leveltype == DTYPE_CATHEDRAL)
 		FillFloor();
@@ -2067,7 +1314,7 @@ void LoadPreL1Dungeon(const char *path)
 
 void LoadL1Dungeon(const char *path, Point spawn)
 {
-	LoadDungeonBase(path, spawn, Tile::Floor, 22);
+	LoadDungeonBase(path, spawn, Floor, Dirt);
 
 	if (leveltype == DTYPE_CATHEDRAL)
 		FillFloor();

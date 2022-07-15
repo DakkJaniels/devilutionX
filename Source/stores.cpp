@@ -24,6 +24,7 @@
 #include "utils/format_int.hpp"
 #include "utils/language.h"
 #include "utils/stdcompat/string_view.hpp"
+#include "utils/str_cat.hpp"
 #include "utils/utf8.hpp"
 
 namespace devilution {
@@ -501,7 +502,7 @@ bool SmithSellOk(int i)
 		return false;
 	if (pI->_itype == ItemType::Gold)
 		return false;
-	if (pI->_itype == ItemType::Staff && (!gbIsHellfire || pI->_iSpell != SPL_NULL))
+	if (pI->_itype == ItemType::Staff && (!gbIsHellfire || IsValidSpell(pI->_iSpell)))
 		return false;
 	if (pI->_iClass == ICLASS_QUEST)
 		return false;
@@ -798,7 +799,7 @@ bool WitchSellOk(int i)
 		rv = false;
 	if (pI->_iClass == ICLASS_QUEST)
 		rv = false;
-	if (pI->_itype == ItemType::Staff && (!gbIsHellfire || pI->_iSpell != SPL_NULL))
+	if (pI->_itype == ItemType::Staff && (!gbIsHellfire || IsValidSpell(pI->_iSpell)))
 		rv = true;
 	if (pI->IDidx >= IDI_FIRSTQUEST && pI->IDidx <= IDI_LASTQUEST)
 		rv = false;
@@ -1022,7 +1023,7 @@ void StoreConfirm(Item &item)
 		prompt = _("Are you sure you want to repair this item?");
 		break;
 	default:
-		app_fatal(fmt::format("Unknown store dialog {}", static_cast<int>(stextshold)));
+		app_fatal(StrCat("Unknown store dialog ", static_cast<int>(stextshold)));
 	}
 	AddSText(0, 15, prompt, UiFlags::ColorWhite | UiFlags::AlignCenter, false);
 	AddSText(0, 18, _("Yes"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
@@ -1464,7 +1465,7 @@ void SmithBuyPItem(Item &item)
 
 	premiumitems[xx].clear();
 	numpremium--;
-	SpawnPremium(MyPlayerId);
+	SpawnPremium(*MyPlayer);
 }
 
 void SmithPremiumBuyEnter()
@@ -2243,7 +2244,7 @@ void SetupTownStores()
 	SpawnWitch(l);
 	SpawnHealer(l);
 	SpawnBoy(myPlayer._pLevel);
-	SpawnPremium(MyPlayerId);
+	SpawnPremium(myPlayer);
 }
 
 void FreeStoreMem()
@@ -2274,7 +2275,7 @@ void PrintSString(const Surface &out, int margin, int line, string_view text, Ui
 	const Rectangle rect { { sx, sy }, { width, 0 } };
 	DrawString(out, text, rect, flags);
 	if (price > 0)
-		DrawString(out, fmt::format("{:s}", FormatInteger(price)), rect, flags | UiFlags::AlignRight);
+		DrawString(out, FormatInteger(price), rect, flags | UiFlags::AlignRight);
 
 	if (stextsel == line) {
 		DrawSelector(out, rect, text, flags);
@@ -2292,8 +2293,8 @@ void DrawSLine(const Surface &out, int sy)
 		width -= SidePanelSize.width;
 	}
 
-	BYTE *src = out.at(uiPosition.x + sx, uiPosition.y + 25);
-	BYTE *dst = out.at(uiPosition.x + sx, sy);
+	uint8_t *src = out.at(uiPosition.x + sx, uiPosition.y + 25);
+	uint8_t *dst = out.at(uiPosition.x + sx, sy);
 
 	for (int i = 0; i < 3; i++, src += out.pitch(), dst += out.pitch())
 		memcpy(dst, src, width);

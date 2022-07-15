@@ -12,6 +12,7 @@ set(devilutionx_fixtures
   diablo/5-1677631846.dun
   diablo/6-1824554527.dun
   diablo/6-2034738122.dun
+  diablo/6-2033265779.dun
   diablo/7-680552750.dun
   diablo/7-1607627156.dun
   diablo/8-1999936419.dun
@@ -28,6 +29,7 @@ set(devilutionx_fixtures
   diablo/15-1583642716-changed.dun
   diablo/16-741281013.dun
   hellfire/1-401921334.dun
+  hellfire/1-536340718.dun
   hellfire/2-128964898.dun
   hellfire/2-1180526547.dun
   hellfire/3-1512491184.dun
@@ -62,6 +64,9 @@ set(devilutionx_fixtures
   Levels/L4Data/Vile1.DUN
   Levels/L4Data/Warlord.DUN
   Levels/L4Data/Warlord2.DUN
+  timedemo/WarriorLevel1to2/demo_0.dmo
+  timedemo/WarriorLevel1to2/demo_0_reference_spawn_0.sv
+  timedemo/WarriorLevel1to2/spawn_0.sv
 )
 
 foreach(fixture ${devilutionx_fixtures})

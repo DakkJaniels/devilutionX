@@ -1,10 +1,11 @@
+#include "engine/demomode.h"
+
 #include <deque>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
 #include "controls/plrctrls.h"
-#include "demomode.h"
 #include "menu.h"
 #include "nthread.h"
 #include "options.h"
@@ -172,7 +173,7 @@ bool GetRunGameLoop(bool &drawGame, bool &processInput)
 		app_fatal("Unexpected Message");
 	if (Timedemo) {
 		// disable additonal rendering to speedup replay
-		drawGame = dmsg.type == DemoMsgType::GameTick;
+		drawGame = dmsg.type == DemoMsgType::GameTick && !HeadlessMode;
 	} else {
 		int currentTickCount = SDL_GetTicks();
 		int ticksElapsed = currentTickCount - DemoModeLastTick;
@@ -295,7 +296,7 @@ void NotifyGameLoopEnd()
 		CreateDemoReference = false;
 	}
 
-	if (IsRunning()) {
+	if (IsRunning() && !HeadlessMode) {
 		float seconds = (SDL_GetTicks() - StartTime) / 1000.0f;
 		SDL_Log("%d frames, %.2f seconds: %.1f fps", LogicTick, seconds, LogicTick / seconds);
 		gbRunGameResult = false;

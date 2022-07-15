@@ -117,6 +117,7 @@ set(libdevilutionx_SRCS
   engine/render/scrollrt.cpp
   engine/render/text_render.cpp
 
+  levels/crypt.cpp
   levels/drlg_l1.cpp
   levels/drlg_l2.cpp
   levels/drlg_l3.cpp
@@ -162,6 +163,7 @@ set(libdevilutionx_SRCS
   utils/pcx.cpp
   utils/sdl_bilinear_scale.cpp
   utils/sdl_thread.cpp
+  utils/str_cat.cpp
   utils/utf8.cpp)
 
 if(IOS)
@@ -247,6 +249,7 @@ target_link_libraries(libdevilutionx PUBLIC
   libmpq
   libsmackerdec
   simpleini::simpleini
+  tl
   hoehrmann_utf8
 )
 

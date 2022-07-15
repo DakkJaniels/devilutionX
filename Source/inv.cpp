@@ -20,6 +20,7 @@
 #include "inv_iterators.hpp"
 #include "levels/town.h"
 #include "minitext.h"
+#include "miniwin/misc_msg.h"
 #include "options.h"
 #include "panels/ui_panels.hpp"
 #include "plrmsg.h"
@@ -30,6 +31,7 @@
 #include "utils/language.h"
 #include "utils/sdl_geometry.h"
 #include "utils/stdcompat/optional.hpp"
+#include "utils/str_cat.hpp"
 #include "utils/utf8.hpp"
 
 namespace devilution {
@@ -1075,9 +1077,6 @@ void InitInv()
 		pInvCels = LoadCel(!gbIsSpawn ? "Data\\Inv\\Inv_Sor.CEL" : "Data\\Inv\\Inv.CEL", static_cast<uint16_t>(SidePanelSize.width));
 		break;
 	}
-
-	CloseInventory();
-	drawsbarflag = false;
 }
 
 void DrawInv(const Surface &out)
@@ -1219,7 +1218,7 @@ void DrawInvBelt(const Surface &out)
 
 		if (AllItemsList[myPlayer.SpdList[i].IDidx].iUsable
 		    && myPlayer.SpdList[i]._itype != ItemType::Gold) {
-			DrawString(out, fmt::format("{:d}", i + 1), { position - Displacement { 0, 12 }, InventorySlotSizeInPixels }, UiFlags::ColorWhite | UiFlags::AlignRight);
+			DrawString(out, StrCat(i + 1), { position - Displacement { 0, 12 }, InventorySlotSizeInPixels }, UiFlags::ColorWhite | UiFlags::AlignRight);
 		}
 	}
 }
@@ -1353,7 +1352,7 @@ bool AutoPlaceItemInInventory(Player &player, const Item &item, bool persistItem
 		return false;
 	}
 
-	app_fatal(fmt::format("Unknown item size: {}x{}", itemSize.width, itemSize.height));
+	app_fatal(StrCat("Unknown item size: ", itemSize.width, "x", itemSize.height));
 }
 
 bool AutoPlaceItemInInventorySlot(Player &player, int slotIndex, const Item &item, bool persistItem)
@@ -1952,7 +1951,7 @@ bool UseInvItem(int pnum, int cii)
 {
 	Player &player = Players[pnum];
 
-	if (player._pInvincible && player._pHitPoints == 0 && pnum == MyPlayerId)
+	if (player._pInvincible && player._pHitPoints == 0 && &player == MyPlayer)
 		return true;
 	if (pcurs != CURSOR_HAND)
 		return true;
@@ -2053,7 +2052,7 @@ bool UseInvItem(int pnum, int cii)
 	int idata = ItemCAnimTbl[item->_iCurs];
 	if (item->_iMiscId == IMISC_BOOK)
 		PlaySFX(IS_RBOOK);
-	else if (pnum == MyPlayerId)
+	else if (&player == MyPlayer)
 		PlaySFX(ItemInvSnds[idata]);
 
 	UseItem(pnum, item->_iMiscId, item->_iSpell);
