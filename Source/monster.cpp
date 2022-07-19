@@ -231,7 +231,7 @@ void InitMonster(Monster &monster, Direction rd, int mtype, Point position)
 	monster.rndItemSeed = AdvanceRndSeed();
 	monster.aiSeed = AdvanceRndSeed();
 	monster.whoHit = 0;
-	monster.exp = monster.data().exp;
+	// monster.exp = monster.data().exp;
 	monster.toHit = monster.data().toHit;
 	monster.minDamage = monster.data().minDamage;
 	monster.maxDamage = monster.data().maxDamage;
@@ -260,7 +260,7 @@ void InitMonster(Monster &monster, Direction rd, int mtype, Point position)
 			monster.maxHitPoints += 64;
 		monster.hitPoints = monster.maxHitPoints;
 		monster.level += 15;
-		monster.exp = 2 * (monster.exp + 1000);
+		// monster.exp = 2 * (monster.exp + 1000);
 		monster.toHit += NightmareToHitBonus;
 		monster.minDamage = 2 * (monster.minDamage + 2);
 		monster.maxDamage = 2 * (monster.maxDamage + 2);
@@ -276,7 +276,7 @@ void InitMonster(Monster &monster, Direction rd, int mtype, Point position)
 			monster.maxHitPoints += 192;
 		monster.hitPoints = monster.maxHitPoints;
 		monster.level += 30;
-		monster.exp = 4 * (monster.exp + 1000);
+		// monster.exp = 4 * (monster.exp + 1000);
 		monster.toHit += HellToHitBonus;
 		monster.minDamage = 4 * monster.minDamage + 6;
 		monster.maxDamage = 4 * monster.maxDamage + 6;
@@ -1086,13 +1086,35 @@ void MonsterHitMonster(Monster &monster, int i, int dam)
 	HitMonster(monster, dam);
 }
 
-void MonsterDeath(Monster &monster, int pnum, Direction md, bool sendmsg)
+void MonsterDeath(const Monster &monster, int pnum, Direction md, bool sendmsg)
 {
 	if (pnum < MAX_PLRS) {
 		if (pnum >= 0)
 			monster.whoHit |= 1 << pnum;
-		if (monster.type().type != MT_GOLEM)
-			AddPlrMonstExper(monster.level, monster.exp, monster.whoHit);
+		if (monster.type().type != MT_GOLEM) {
+			int difficultyMultiplier = 1;
+			int difficultyAdder = 0;
+			int uniqueMonsterMultiplier = 1;
+			switch (sgGameInitInfo.nDifficulty) {
+			case DIFF_NIGHTMARE:
+				difficultyMultiplier = 2;
+				difficultyAdder = 1000;
+				break;
+			case DIFF_HELL:
+				difficultyMultiplier = 4;
+				difficultyAdder = 1000;
+				break;
+			case DIFF_NORMAL:
+			default:
+				break;
+			}
+			if (monster.isUnique()) {
+				uniqueMonsterMultiplier = 2;
+			}
+			uint32_t monsterExperience = ((monster.data().exp * uniqueMonsterMultiplier) + difficultyAdder) * difficultyMultiplier;
+			AddPlrMonstExper(monster.level, monsterExperience, monster.whoHit);
+		}
+		
 	}
 
 	MonsterKillCounts[monster.type().type]++;
@@ -3393,7 +3415,7 @@ void PrepareUniqueMonst(Monster &monster, UniqueMonsterType monsterType, int min
 		monster.level = monster.data().level + 5;
 	}
 
-	monster.exp *= 2;
+	// monster.exp *= 2;
 	monster.maxHitPoints = uniqueMonsterData.mmaxhp << 6;
 
 	if (!gbIsMultiplayer)
@@ -3433,7 +3455,7 @@ void PrepareUniqueMonst(Monster &monster, UniqueMonsterType monsterType, int min
 			monster.maxHitPoints += 64;
 		monster.level += 15;
 		monster.hitPoints = monster.maxHitPoints;
-		monster.exp = 2 * (monster.exp + 1000);
+		// monster.exp = 2 * (monster.exp + 1000);
 		monster.minDamage = 2 * (monster.minDamage + 2);
 		monster.maxDamage = 2 * (monster.maxDamage + 2);
 		monster.minDamageSpecial = 2 * (monster.minDamageSpecial + 2);
@@ -3446,7 +3468,7 @@ void PrepareUniqueMonst(Monster &monster, UniqueMonsterType monsterType, int min
 			monster.maxHitPoints += 192;
 		monster.level += 30;
 		monster.hitPoints = monster.maxHitPoints;
-		monster.exp = 4 * (monster.exp + 1000);
+		// monster.exp = 4 * (monster.exp + 1000);
 		monster.minDamage = 4 * monster.minDamage + 6;
 		monster.maxDamage = 4 * monster.maxDamage + 6;
 		monster.minDamageSpecial = 4 * monster.minDamageSpecial + 6;
