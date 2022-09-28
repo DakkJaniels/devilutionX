@@ -81,10 +81,11 @@ TEST(Stores, CheckPremiumItemSpawning)
 	srand(time(NULL));
 	SetRndSeed(rand());
 	int sum = 0;
-	for (int i = 0; i < 100; i++) {
+	int numOfRuns = 100;
+	for (int i = 0; i < numOfRuns; i++) {
 		sum += StoreTest(playerLevel);
 	}
-	float averageRun = sum / 100;
+	float averageRun = (float)sum / (float)numOfRuns;
 	SDL_Log("Average %0.1f runs item", averageRun);
 }
 } // namespace
