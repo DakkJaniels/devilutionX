@@ -510,6 +510,6 @@ extern int MaxGold;
 extern BYTE ItemCAnimTbl[];
 extern _sfx_id ItemInvSnds[];
 
-int StoreTest();
+int StoreTest(int playerLevel);
 
 } // namespace devilution

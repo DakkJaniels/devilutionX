@@ -4825,11 +4825,11 @@ void initItemGetRecords()
 	gnNumGetRecords = 0;
 }
 
-int StoreTest()
+int StoreTest(int playerLevel)
 {
 	auto &myPlayer = Players[MyPlayerId];
 	
-	myPlayer._pLevel = 21;
+	myPlayer._pLevel = playerLevel;
 	gbIsHellfire = false;
 	int i = 1;
 	while (true) {
@@ -4837,7 +4837,8 @@ int StoreTest()
 		SetRndSeed(rand());
 		SpawnPremium(MyPlayerId);
 		for (int j = 0; j < 6; j++) {
-			if (premiumitems[j]._itype == ItemType::Bow && (premiumitems[j]._iPLDam >= 96 && premiumitems[j]._iPLDam <= 110) && ((premiumitems[j]._iFlags & ISPL_FASTATTACK) != 0)) {
+			//if (premiumitems[j]._itype == ItemType::Bow && (premiumitems[j]._iPLDam >= 96 && premiumitems[j]._iPLDam <= 110) && ((premiumitems[j]._iFlags & ISPL_FASTATTACK) != 0)) {
+			if ((premiumitems[j]._iFlags & ISPL_STEALMANA_3) != 0) {
 				SDL_Log("%s found on try %d", premiumitems[j]._iIName, i);
 				return i;
 			}
