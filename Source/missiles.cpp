@@ -289,7 +289,7 @@ bool Plr2PlrMHit(const Player &player, int p, int mindam, int maxdam, int dist, 
 
 	*blocked = false;
 
-	if (target.isOnArenaLevel() && target._pmode == PM_WALK_SIDEWAYS)
+	if (target.isOnArenaLevel() && target._pmode == PlayerMode::WalkSideways)
 		return false;
 
 	if (target._pInvincible) {
@@ -343,7 +343,7 @@ bool Plr2PlrMHit(const Player &player, int p, int mindam, int maxdam, int dist, 
 	}
 
 	int blkper = 100;
-	if (!shift && (target._pmode == PM_STAND || target._pmode == PM_ATTACK) && target._pBlockFlag) {
+	if (!shift && (target._pmode == PlayerMode::Stand || target._pmode == PlayerMode::Attack) && target._pBlockFlag) {
 		blkper = GenerateRnd(100);
 	}
 
@@ -1028,7 +1028,7 @@ bool PlayerMHit(int pnum, Monster *monster, int dist, int mind, int maxd, Missil
 	hper = std::max(hper, minhit);
 
 	int blk = 100;
-	if ((player._pmode == PM_STAND || player._pmode == PM_ATTACK) && player._pBlockFlag) {
+	if ((player._pmode == PlayerMode::Stand || player._pmode == PlayerMode::Attack) && player._pBlockFlag) {
 		blk = GenerateRnd(100);
 	}
 
@@ -3350,11 +3350,11 @@ void ProcessTownPortal(Missile &missile)
 	}
 
 	for (Player &player : Players) {
-		if (player.plractive && player.isOnActiveLevel() && !player._pLvlChanging && player._pmode == PM_STAND && player.position.tile == missile.position.tile) {
+		if (player.plractive && player.isOnActiveLevel() && !player._pLvlChanging && player._pmode == PlayerMode::Stand && player.position.tile == missile.position.tile) {
 			ClrPlrPath(player);
 			if (&player == MyPlayer) {
 				NetSendCmdParam1(true, CMD_WARP, missile._misource);
-				player._pmode = PM_NEWLVL;
+				player._pmode = PlayerMode::NewLevel;
 			}
 		}
 	}

@@ -81,7 +81,7 @@ void GamemenuUpdateSingle()
 {
 	sgSingleMenu[3].setEnabled(gbValidSaveFile);
 
-	bool enable = MyPlayer->_pmode != PM_DEATH && !MyPlayerIsDead;
+	bool enable = MyPlayer->_pmode != PlayerMode::Death && !MyPlayerIsDead;
 
 	sgSingleMenu[0].setEnabled(enable);
 }
@@ -99,7 +99,7 @@ void GamemenuPrevious(bool /*bActivate*/)
 void GamemenuNewGame(bool /*bActivate*/)
 {
 	for (Player &player : Players) {
-		player._pmode = PM_QUIT;
+		player._pmode = PlayerMode::Quit;
 		player._pInvincible = true;
 	}
 
@@ -319,7 +319,7 @@ void gamemenu_save_game(bool /*bActivate*/)
 		return;
 	}
 
-	if (MyPlayer->_pmode == PM_DEATH || MyPlayerIsDead) {
+	if (MyPlayer->_pmode == PlayerMode::Death || MyPlayerIsDead) {
 		gamemenu_off();
 		return;
 	}

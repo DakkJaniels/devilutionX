@@ -1565,7 +1565,7 @@ void SpellBookKeyPressed()
 
 bool IsPlayerDead()
 {
-	return MyPlayer->_pmode == PM_DEATH || MyPlayerIsDead;
+	return MyPlayer->_pmode == PlayerMode::Death || MyPlayerIsDead;
 }
 
 bool IsGameRunning()

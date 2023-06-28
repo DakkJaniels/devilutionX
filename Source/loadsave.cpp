@@ -439,7 +439,7 @@ void LoadPlayer(LoadHelper &file, Player &player)
 
 	int32_t tempPositionX = file.NextLE<int32_t>();
 	int32_t tempPositionY = file.NextLE<int32_t>();
-	if (player._pmode == PM_WALK_NORTHWARDS) {
+	if (player._pmode == PlayerMode::WalkNorth) {
 		// These values are saved as offsets to remain consistent with old savefiles
 		tempPositionX += player.position.tile.x;
 		tempPositionY += player.position.tile.y;
@@ -1249,7 +1249,7 @@ void SavePlayer(SaveHelper &file, const Player &player)
 
 	int32_t tempPositionX = player.position.temp.x;
 	int32_t tempPositionY = player.position.temp.y;
-	if (player._pmode == PM_WALK_NORTHWARDS) {
+	if (player._pmode == PlayerMode::WalkNorth) {
 		// For backwards compatibility, save this as an offset
 		tempPositionX -= player.position.tile.x;
 		tempPositionY -= player.position.tile.y;
@@ -2027,7 +2027,7 @@ void LoadHeroItems(Player &player)
 
 	gbIsHellfireSaveGame = file.NextBool8();
 
-	LoadMatchingItems(file, player, NUM_INVLOC, player.InvBody);
+	LoadMatchingItems(file, player, InventoryBodyLocation::NumberOfLocations, player.InvBody);
 	LoadMatchingItems(file, player, InventoryGridCells, player.InvList);
 	LoadMatchingItems(file, player, MaxBeltItems, player.SpdList);
 
@@ -2298,7 +2298,7 @@ void LoadGame(bool firstflag)
 
 void SaveHeroItems(SaveWriter &saveWriter, Player &player)
 {
-	size_t itemCount = static_cast<size_t>(NUM_INVLOC) + InventoryGridCells + MaxBeltItems;
+	size_t itemCount = static_cast<size_t>(InventoryBodyLocation::NumberOfLocations) + InventoryGridCells + MaxBeltItems;
 	SaveHelper file(saveWriter, "heroitems", itemCount * (gbIsHellfire ? HellfireItemSaveSize : DiabloItemSaveSize) + sizeof(uint8_t));
 
 	file.WriteLE<uint8_t>(gbIsHellfire ? 1 : 0);

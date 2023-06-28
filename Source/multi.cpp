@@ -134,7 +134,7 @@ void NetReceivePlayerData(TPkt *pkt)
 	Point target = myPlayer.GetTargetPosition();
 	// Don't send desired target position when we will change our position soon.
 	// This prevents a desync where the remote client starts a walking to the old target position when the teleport is finished but the the new position isn't received yet.
-	if (myPlayer._pmode == PM_SPELL && IsAnyOf(myPlayer.executedSpell.spellId, SpellID::Teleport, SpellID::Phasing, SpellID::Warp))
+	if (myPlayer._pmode == PlayerMode::Spell && IsAnyOf(myPlayer.executedSpell.spellId, SpellID::Teleport, SpellID::Phasing, SpellID::Warp))
 		target = {};
 
 	pkt->hdr.wCheck = HeaderCheckVal;
@@ -370,7 +370,7 @@ void SetupLocalPositions()
 	myPlayer.setLevel(currlevel);
 	myPlayer._pLvlChanging = true;
 	myPlayer.pLvlLoad = 0;
-	myPlayer._pmode = PM_NEWLVL;
+	myPlayer._pmode = PlayerMode::NewLevel;
 	myPlayer.destAction = ACTION_NONE;
 }
 
@@ -863,8 +863,8 @@ void recv_plrinfo(int pnum, const TCmdPlrInfoHdr &header, bool recv)
 	}
 
 	player._pgfxnum &= ~0xFU;
-	player._pmode = PM_DEATH;
-	NewPlrAnim(player, player_graphic::Death, Direction::South);
+	player._pmode = PlayerMode::Death;
+	NewPlrAnim(player, PlayerGraphic::Death, Direction::South);
 	player.AnimInfo.currentFrame = player.AnimInfo.numberOfFrames - 2;
 	dFlags[player.position.tile.x][player.position.tile.y] |= DungeonFlag::DeadPlayer;
 }

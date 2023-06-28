@@ -266,7 +266,7 @@ void DoResurrect(size_t pnum, Player &target)
 	target._pMana = 0;
 	target._pManaBase = target._pMana + (target._pMaxManaBase - target._pMaxMana);
 
-	target._pmode = PM_STAND;
+	target._pmode = PlayerMode::Stand;
 
 	CalcPlrInv(target, true);
 

@@ -62,7 +62,7 @@ struct DirectionSettings {
 	Direction dir;
 	DisplacementOf<int8_t> tileAdd;
 	DisplacementOf<int8_t> map;
-	PLR_MODE walkMode;
+	PlayerMode walkMode;
 	void (*walkModeHandler)(Player &, const DirectionSettings &);
 };
 
@@ -111,14 +111,14 @@ void WalkSideways(Player &player, const DirectionSettings &walkParams)
 
 constexpr std::array<const DirectionSettings, 8> WalkSettings { {
 	// clang-format off
-	{ Direction::South,     {  1,  1 }, { 0, 0 }, PM_WALK_SOUTHWARDS, WalkSouthwards },
-	{ Direction::SouthWest, {  0,  1 }, { 0, 0 }, PM_WALK_SOUTHWARDS, WalkSouthwards },
-	{ Direction::West,      { -1,  1 }, { 0, 1 }, PM_WALK_SIDEWAYS,   WalkSideways   },
-	{ Direction::NorthWest, { -1,  0 }, { 0, 0 }, PM_WALK_NORTHWARDS, WalkNorthwards },
-	{ Direction::North,     { -1, -1 }, { 0, 0 }, PM_WALK_NORTHWARDS, WalkNorthwards },
-	{ Direction::NorthEast, {  0, -1 }, { 0, 0 }, PM_WALK_NORTHWARDS, WalkNorthwards },
-	{ Direction::East,      {  1, -1 }, { 1, 0 }, PM_WALK_SIDEWAYS,   WalkSideways   },
-	{ Direction::SouthEast, {  1,  0 }, { 0, 0 }, PM_WALK_SOUTHWARDS, WalkSouthwards }
+	{ Direction::South,     {  1,  1 }, { 0, 0 }, PlayerMode::WalkSouth, WalkSouthwards },
+	{ Direction::SouthWest, {  0,  1 }, { 0, 0 }, PlayerMode::WalkSouth, WalkSouthwards },
+	{ Direction::West,      { -1,  1 }, { 0, 1 }, PlayerMode::WalkSideways,   WalkSideways   },
+	{ Direction::NorthWest, { -1,  0 }, { 0, 0 }, PlayerMode::WalkNorth, WalkNorthwards },
+	{ Direction::North,     { -1, -1 }, { 0, 0 }, PlayerMode::WalkNorth, WalkNorthwards },
+	{ Direction::NorthEast, {  0, -1 }, { 0, 0 }, PlayerMode::WalkNorth, WalkNorthwards },
+	{ Direction::East,      {  1, -1 }, { 1, 0 }, PlayerMode::WalkSideways,   WalkSideways   },
+	{ Direction::SouthEast, {  1,  0 }, { 0, 0 }, PlayerMode::WalkSouth, WalkSouthwards }
 	// clang-format on
 } };
 
@@ -167,7 +167,7 @@ void StartWalkAnimation(Player &player, Direction dir, bool pmWillBeCalled)
 		skippedFrames = 2;
 	if (pmWillBeCalled)
 		skippedFrames += 1;
-	NewPlrAnim(player, player_graphic::Walk, dir, AnimationDistributionFlags::ProcessAnimationPending, skippedFrames);
+	NewPlrAnim(player, PlayerGraphic::Walk, dir, AnimationDistributionFlags::ProcessAnimationPending, skippedFrames);
 }
 
 /**
@@ -226,10 +226,10 @@ void StartAttack(Player &player, Direction d, bool includesFirstFrame)
 	}
 
 	auto animationFlags = AnimationDistributionFlags::ProcessAnimationPending;
-	if (player._pmode == PM_ATTACK)
+	if (player._pmode == PlayerMode::Attack)
 		animationFlags = static_cast<AnimationDistributionFlags>(animationFlags | AnimationDistributionFlags::RepeatedAction);
-	NewPlrAnim(player, player_graphic::Attack, d, animationFlags, skippedAnimationFrames, player._pAFNum);
-	player._pmode = PM_ATTACK;
+	NewPlrAnim(player, PlayerGraphic::Attack, d, animationFlags, skippedAnimationFrames, player._pAFNum);
+	player._pmode = PlayerMode::Attack;
 	FixPlayerLocation(player, d);
 	SetPlayerOld(player);
 }
@@ -252,25 +252,25 @@ void StartRangeAttack(Player &player, Direction d, WorldTileCoord cx, WorldTileC
 	}
 
 	auto animationFlags = AnimationDistributionFlags::ProcessAnimationPending;
-	if (player._pmode == PM_RATTACK)
+	if (player._pmode == PlayerMode::RangedAttack)
 		animationFlags = static_cast<AnimationDistributionFlags>(animationFlags | AnimationDistributionFlags::RepeatedAction);
-	NewPlrAnim(player, player_graphic::Attack, d, animationFlags, skippedAnimationFrames, player._pAFNum);
+	NewPlrAnim(player, PlayerGraphic::Attack, d, animationFlags, skippedAnimationFrames, player._pAFNum);
 
-	player._pmode = PM_RATTACK;
+	player._pmode = PlayerMode::RangedAttack;
 	FixPlayerLocation(player, d);
 	SetPlayerOld(player);
 	player.position.temp = WorldTilePosition { cx, cy };
 }
 
-player_graphic GetPlayerGraphicForSpell(SpellID spellId)
+PlayerGraphic GetPlayerGraphicForSpell(SpellID spellId)
 {
 	switch (GetSpellData(spellId).type()) {
 	case MagicType::Fire:
-		return player_graphic::Fire;
+		return PlayerGraphic::Fire;
 	case MagicType::Lightning:
-		return player_graphic::Lightning;
+		return PlayerGraphic::Lightning;
 	default:
-		return player_graphic::Magic;
+		return PlayerGraphic::Magic;
 	}
 }
 
@@ -302,13 +302,13 @@ void StartSpell(Player &player, Direction d, WorldTileCoord cx, WorldTileCoord c
 		return;
 
 	auto animationFlags = AnimationDistributionFlags::ProcessAnimationPending;
-	if (player._pmode == PM_SPELL)
+	if (player._pmode == PlayerMode::Spell)
 		animationFlags = static_cast<AnimationDistributionFlags>(animationFlags | AnimationDistributionFlags::RepeatedAction);
 	NewPlrAnim(player, GetPlayerGraphicForSpell(player.queuedSpell.spellId), d, animationFlags, 0, player._pSFNum);
 
 	PlaySfxLoc(GetSpellData(player.queuedSpell.spellId).sSFX, player.position.tile);
 
-	player._pmode = PM_SPELL;
+	player._pmode = PlayerMode::Spell;
 
 	FixPlayerLocation(player, d);
 	SetPlayerOld(player);
@@ -432,7 +432,7 @@ void InitLevelChange(Player &player)
 /**
  * @brief Continue movement towards new tile
  */
-bool DoWalk(Player &player, int variant)
+bool DoWalk(Player &player, PlayerMode variant)
 {
 	// Play walking sound effect on certain animation frames
 	if (*sgOptions.Audio.walkingSound && (leveltype != DTYPE_TOWN || sgGameInitInfo.bRunInTown == 0)) {
@@ -450,15 +450,15 @@ bool DoWalk(Player &player, int variant)
 
 	// We reached the new tile -> update the player's tile position
 	switch (variant) {
-	case PM_WALK_NORTHWARDS:
+	case PlayerMode::WalkNorth:
 		dPlayer[player.position.tile.x][player.position.tile.y] = 0;
 		player.position.tile = player.position.temp;
 		dPlayer[player.position.tile.x][player.position.tile.y] = player.getId() + 1;
 		break;
-	case PM_WALK_SOUTHWARDS:
+	case PlayerMode::WalkSouth:
 		dPlayer[player.position.temp.x][player.position.temp.y] = 0;
 		break;
-	case PM_WALK_SIDEWAYS:
+	case PlayerMode::WalkSideways:
 		dPlayer[player.position.tile.x][player.position.tile.y] = 0;
 		player.position.tile = player.position.temp;
 		// dPlayer is set here for backwards comparability, without it the player would be invisible if loaded from a vanilla save.
@@ -756,7 +756,7 @@ bool PlrHitPlr(Player &attacker, Player &target)
 	hper = clamp(hper, 5, 95);
 
 	int blk = 100;
-	if ((target._pmode == PM_STAND || target._pmode == PM_ATTACK) && target._pBlockFlag) {
+	if ((target._pmode == PlayerMode::Stand || target._pmode == PlayerMode::Attack) && target._pBlockFlag) {
 		blk = GenerateRnd(100);
 	}
 
@@ -1193,7 +1193,7 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 
 	Direction d;
 	if (player.walkpath[0] != WALK_NONE) {
-		if (player._pmode == PM_STAND) {
+		if (player._pmode == PlayerMode::Stand) {
 			if (&player == MyPlayer) {
 				if (player.destAction == ACTION_ATTACKMON || player.destAction == ACTION_ATTACKPLR) {
 					if (player.destAction == ACTION_ATTACKMON) {
@@ -1251,7 +1251,7 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 
 			player.walkpath[MaxPathLength - 1] = WALK_NONE;
 
-			if (player._pmode == PM_STAND) {
+			if (player._pmode == PlayerMode::Stand) {
 				StartStand(player, player._pdir);
 				player.destAction = ACTION_NONE;
 			}
@@ -1263,7 +1263,7 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 		return;
 	}
 
-	if (player._pmode == PM_STAND) {
+	if (player._pmode == PlayerMode::Stand) {
 		switch (player.destAction) {
 		case ACTION_ATTACK:
 			d = GetDirection(player.position.tile, { player.destParam1, player.destParam2 });
@@ -1386,7 +1386,7 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 		return;
 	}
 
-	if (player._pmode == PM_ATTACK && player.AnimInfo.currentFrame >= player._pAFNum) {
+	if (player._pmode == PlayerMode::Attack && player.AnimInfo.currentFrame >= player._pAFNum) {
 		if (player.destAction == ACTION_ATTACK) {
 			d = GetDirection(player.position.future, { player.destParam1, player.destParam2 });
 			StartAttack(player, d, pmWillBeCalled);
@@ -1417,7 +1417,7 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 		}
 	}
 
-	if (player._pmode == PM_RATTACK && player.AnimInfo.currentFrame >= player._pAFNum) {
+	if (player._pmode == PlayerMode::RangedAttack && player.AnimInfo.currentFrame >= player._pAFNum) {
 		if (player.destAction == ACTION_RATTACK) {
 			d = GetDirection(player.position.tile, { player.destParam1, player.destParam2 });
 			StartRangeAttack(player, d, player.destParam1, player.destParam2, pmWillBeCalled);
@@ -1433,7 +1433,7 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 		}
 	}
 
-	if (player._pmode == PM_SPELL && player.AnimInfo.currentFrame >= player._pSFNum) {
+	if (player._pmode == PlayerMode::Spell && player.AnimInfo.currentFrame >= player._pSFNum) {
 		if (player.destAction == ACTION_SPELL) {
 			d = GetDirection(player.position.tile, { player.destParam1, player.destParam2 });
 			StartSpell(player, d, player.destParam1, player.destParam2);
@@ -1455,13 +1455,13 @@ bool PlrDeathModeOK(Player &player)
 	if (&player != MyPlayer) {
 		return true;
 	}
-	if (player._pmode == PM_DEATH) {
+	if (player._pmode == PlayerMode::Death) {
 		return true;
 	}
-	if (player._pmode == PM_QUIT) {
+	if (player._pmode == PlayerMode::Quit) {
 		return true;
 	}
-	if (player._pmode == PM_NEWLVL) {
+	if (player._pmode == PlayerMode::NewLevel) {
 		return true;
 	}
 
@@ -1559,9 +1559,9 @@ HeroClass GetPlayerSpriteClass(HeroClass cls)
 	return cls;
 }
 
-PlayerWeaponGraphic GetPlayerWeaponGraphic(player_graphic graphic, PlayerWeaponGraphic weaponGraphic)
+PlayerWeaponGraphic GetPlayerWeaponGraphic(PlayerGraphic graphic, PlayerWeaponGraphic weaponGraphic)
 {
-	if (leveltype == DTYPE_TOWN && IsAnyOf(graphic, player_graphic::Lightning, player_graphic::Fire, player_graphic::Magic)) {
+	if (leveltype == DTYPE_TOWN && IsAnyOf(graphic, PlayerGraphic::Lightning, PlayerGraphic::Fire, PlayerGraphic::Magic)) {
 		// If the hero doesn't hold the weapon in town then we should use the unarmed animation for casting
 		switch (weaponGraphic) {
 		case PlayerWeaponGraphic::Mace:
@@ -1577,30 +1577,30 @@ PlayerWeaponGraphic GetPlayerWeaponGraphic(player_graphic graphic, PlayerWeaponG
 	return weaponGraphic;
 }
 
-uint16_t GetPlayerSpriteWidth(HeroClass cls, player_graphic graphic, PlayerWeaponGraphic weaponGraphic)
+uint16_t GetPlayerSpriteWidth(HeroClass cls, PlayerGraphic graphic, PlayerWeaponGraphic weaponGraphic)
 {
 	PlayerSpriteData spriteData = PlayersSpriteData[static_cast<size_t>(cls)];
 
 	switch (graphic) {
-	case player_graphic::Stand:
+	case PlayerGraphic::Stand:
 		return spriteData.stand;
-	case player_graphic::Walk:
+	case PlayerGraphic::Walk:
 		return spriteData.walk;
-	case player_graphic::Attack:
+	case PlayerGraphic::Attack:
 		if (weaponGraphic == PlayerWeaponGraphic::Bow)
 			return spriteData.bow;
 		return spriteData.attack;
-	case player_graphic::Hit:
+	case PlayerGraphic::Hit:
 		return spriteData.swHit;
-	case player_graphic::Block:
+	case PlayerGraphic::Block:
 		return spriteData.block;
-	case player_graphic::Lightning:
+	case PlayerGraphic::Lightning:
 		return spriteData.lightning;
-	case player_graphic::Fire:
+	case PlayerGraphic::Fire:
 		return spriteData.fire;
-	case player_graphic::Magic:
+	case PlayerGraphic::Magic:
 		return spriteData.magic;
-	case player_graphic::Death:
+	case PlayerGraphic::Death:
 		return spriteData.death;
 	}
 	app_fatal("Invalid player_graphic");
@@ -1796,7 +1796,7 @@ void Player::Stop()
 
 bool Player::isWalking() const
 {
-	return IsAnyOf(_pmode, PM_WALK_NORTHWARDS, PM_WALK_SOUTHWARDS, PM_WALK_SIDEWAYS);
+	return IsAnyOf(_pmode, PlayerMode::WalkNorth, PlayerMode::WalkSouth, PlayerMode::WalkSideways);
 }
 
 int Player::GetManaShieldDamageReduction()
@@ -1843,28 +1843,28 @@ void Player::ReadySpellFromEquipment(inv_body_loc bodyLocation, bool forceSpell)
 	}
 }
 
-player_graphic Player::getGraphic() const
+PlayerGraphic Player::getGraphic() const
 {
 	switch (_pmode) {
-	case PM_STAND:
-	case PM_NEWLVL:
-	case PM_QUIT:
-		return player_graphic::Stand;
-	case PM_WALK_NORTHWARDS:
-	case PM_WALK_SOUTHWARDS:
-	case PM_WALK_SIDEWAYS:
-		return player_graphic::Walk;
-	case PM_ATTACK:
-	case PM_RATTACK:
-		return player_graphic::Attack;
-	case PM_BLOCK:
-		return player_graphic::Block;
-	case PM_SPELL:
+	case PlayerMode::Stand:
+	case PlayerMode::NewLevel:
+	case PlayerMode::Quit:
+		return PlayerGraphic::Stand;
+	case PlayerMode::WalkNorth:
+	case PlayerMode::WalkSouth:
+	case PlayerMode::WalkSideways:
+		return PlayerGraphic::Walk;
+	case PlayerMode::Attack:
+	case PlayerMode::RangedAttack:
+		return PlayerGraphic::Attack;
+	case PlayerMode::Block:
+		return PlayerGraphic::Block;
+	case PlayerMode::Spell:
 		return GetPlayerGraphicForSpell(executedSpell.spellId);
-	case PM_GOTHIT:
-		return player_graphic::Hit;
-	case PM_DEATH:
-		return player_graphic::Death;
+	case PlayerMode::GotHit:
+		return PlayerGraphic::Hit;
+	case PlayerMode::Death:
+		return PlayerGraphic::Death;
 	default:
 		app_fatal("SyncPlrAnim");
 	}
@@ -1874,39 +1874,39 @@ uint16_t Player::getSpriteWidth() const
 {
 	if (!HeadlessMode)
 		return (*AnimInfo.sprites)[0].width();
-	const player_graphic graphic = getGraphic();
+	const PlayerGraphic graphic = getGraphic();
 	const HeroClass cls = GetPlayerSpriteClass(_pClass);
 	const PlayerWeaponGraphic weaponGraphic = GetPlayerWeaponGraphic(graphic, static_cast<PlayerWeaponGraphic>(_pgfxnum & 0xF));
 	return GetPlayerSpriteWidth(cls, graphic, weaponGraphic);
 }
 
-void Player::getAnimationFramesAndTicksPerFrame(player_graphic graphics, int8_t &numberOfFrames, int8_t &ticksPerFrame) const
+void Player::getAnimationFramesAndTicksPerFrame(PlayerGraphic graphics, int8_t &numberOfFrames, int8_t &ticksPerFrame) const
 {
 	ticksPerFrame = 1;
 	switch (graphics) {
-	case player_graphic::Stand:
+	case PlayerGraphic::Stand:
 		numberOfFrames = _pNFrames;
 		ticksPerFrame = 4;
 		break;
-	case player_graphic::Walk:
+	case PlayerGraphic::Walk:
 		numberOfFrames = _pWFrames;
 		break;
-	case player_graphic::Attack:
+	case PlayerGraphic::Attack:
 		numberOfFrames = _pAFrames;
 		break;
-	case player_graphic::Hit:
+	case PlayerGraphic::Hit:
 		numberOfFrames = _pHFrames;
 		break;
-	case player_graphic::Lightning:
-	case player_graphic::Fire:
-	case player_graphic::Magic:
+	case PlayerGraphic::Lightning:
+	case PlayerGraphic::Fire:
+	case PlayerGraphic::Magic:
 		numberOfFrames = _pSFrames;
 		break;
-	case player_graphic::Death:
+	case PlayerGraphic::Death:
 		numberOfFrames = _pDFrames;
 		ticksPerFrame = 2;
 		break;
-	case player_graphic::Block:
+	case PlayerGraphic::Block:
 		numberOfFrames = _pBFrames;
 		ticksPerFrame = 3;
 		break;
@@ -1922,10 +1922,10 @@ void Player::UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1
 		return;
 
 	// we can only show a preview if our command is executed in the next game tick
-	if (_pmode != PM_STAND)
+	if (_pmode != PlayerMode::Stand)
 		return;
 
-	std::optional<player_graphic> graphic;
+	std::optional<PlayerGraphic> graphic;
 	Direction dir = Direction::South;
 	int minimalWalkDistance = -1;
 
@@ -1933,7 +1933,7 @@ void Player::UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1
 	case _cmd_id::CMD_RATTACKID: {
 		auto &monster = Monsters[wParam1];
 		dir = GetDirection(position.future, monster.position.future);
-		graphic = player_graphic::Attack;
+		graphic = PlayerGraphic::Attack;
 		break;
 	}
 	case _cmd_id::CMD_SPELLID: {
@@ -1948,14 +1948,14 @@ void Player::UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1
 		minimalWalkDistance = 2;
 		if (!CanTalkToMonst(monster)) {
 			dir = GetDirection(position.future, monster.position.future);
-			graphic = player_graphic::Attack;
+			graphic = PlayerGraphic::Attack;
 		}
 		break;
 	}
 	case _cmd_id::CMD_RATTACKPID: {
 		Player &targetPlayer = Players[wParam1];
 		dir = GetDirection(position.future, targetPlayer.position.future);
-		graphic = player_graphic::Attack;
+		graphic = PlayerGraphic::Attack;
 		break;
 	}
 	case _cmd_id::CMD_SPELLPID: {
@@ -1969,18 +1969,18 @@ void Player::UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1
 		point = targetPlayer.position.future;
 		minimalWalkDistance = 2;
 		dir = GetDirection(position.future, targetPlayer.position.future);
-		graphic = player_graphic::Attack;
+		graphic = PlayerGraphic::Attack;
 		break;
 	}
 	case _cmd_id::CMD_ATTACKXY:
 	case _cmd_id::CMD_SATTACKXY:
 		dir = GetDirection(position.tile, point);
-		graphic = player_graphic::Attack;
+		graphic = PlayerGraphic::Attack;
 		minimalWalkDistance = 2;
 		break;
 	case _cmd_id::CMD_RATTACKXY:
 		dir = GetDirection(position.tile, point);
-		graphic = player_graphic::Attack;
+		graphic = PlayerGraphic::Attack;
 		break;
 	case _cmd_id::CMD_SPELLXY:
 		dir = GetDirection(position.tile, point);
@@ -2012,7 +2012,7 @@ void Player::UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1
 			return;
 		}
 		if (steps >= minimalWalkDistance) {
-			graphic = player_graphic::Walk;
+			graphic = PlayerGraphic::Walk;
 			switch (testWalkPath[0]) {
 			case WALK_N:
 				dir = Direction::North;
@@ -2079,7 +2079,7 @@ Player *PlayerAtPosition(Point position)
 	return &Players[abs(playerIndex) - 1];
 }
 
-void LoadPlrGFX(Player &player, player_graphic graphic)
+void LoadPlrGFX(Player &player, PlayerGraphic graphic)
 {
 	if (HeadlessMode)
 		return;
@@ -2095,41 +2095,41 @@ void LoadPlrGFX(Player &player, player_graphic graphic)
 
 	const char *szCel;
 	switch (graphic) {
-	case player_graphic::Stand:
+	case PlayerGraphic::Stand:
 		szCel = "as";
 		if (leveltype == DTYPE_TOWN)
 			szCel = "st";
 		break;
-	case player_graphic::Walk:
+	case PlayerGraphic::Walk:
 		szCel = "aw";
 		if (leveltype == DTYPE_TOWN)
 			szCel = "wl";
 		break;
-	case player_graphic::Attack:
+	case PlayerGraphic::Attack:
 		if (leveltype == DTYPE_TOWN)
 			return;
 		szCel = "at";
 		break;
-	case player_graphic::Hit:
+	case PlayerGraphic::Hit:
 		if (leveltype == DTYPE_TOWN)
 			return;
 		szCel = "ht";
 		break;
-	case player_graphic::Lightning:
+	case PlayerGraphic::Lightning:
 		szCel = "lm";
 		break;
-	case player_graphic::Fire:
+	case PlayerGraphic::Fire:
 		szCel = "fm";
 		break;
-	case player_graphic::Magic:
+	case PlayerGraphic::Magic:
 		szCel = "qm";
 		break;
-	case player_graphic::Death:
+	case PlayerGraphic::Death:
 		if (animWeaponId != PlayerWeaponGraphic::Unarmed)
 			return;
 		szCel = "dt";
 		break;
-	case player_graphic::Block:
+	case PlayerGraphic::Block:
 		if (leveltype == DTYPE_TOWN)
 			return;
 		if (!player._pBlockFlag)
@@ -2163,13 +2163,13 @@ void InitPlayerGFX(Player &player)
 
 	if (player._pHitPoints >> 6 == 0) {
 		player._pgfxnum &= ~0xFU;
-		LoadPlrGFX(player, player_graphic::Death);
+		LoadPlrGFX(player, PlayerGraphic::Death);
 		return;
 	}
 
-	for (size_t i = 0; i < enum_size<player_graphic>::value; i++) {
-		auto graphic = static_cast<player_graphic>(i);
-		if (graphic == player_graphic::Death)
+	for (size_t i = 0; i < enum_size<PlayerGraphic>::value; i++) {
+		auto graphic = static_cast<PlayerGraphic>(i);
+		if (graphic == PlayerGraphic::Death)
 			continue;
 		LoadPlrGFX(player, graphic);
 	}
@@ -2183,7 +2183,7 @@ void ResetPlayerGFX(Player &player)
 	}
 }
 
-void NewPlrAnim(Player &player, player_graphic graphic, Direction dir, AnimationDistributionFlags flags /*= AnimationDistributionFlags::None*/, int8_t numSkippedFrames /*= 0*/, int8_t distributeFramesBeforeFrame /*= 0*/)
+void NewPlrAnim(Player &player, PlayerGraphic graphic, Direction dir, AnimationDistributionFlags flags /*= AnimationDistributionFlags::None*/, int8_t numSkippedFrames /*= 0*/, int8_t distributeFramesBeforeFrame /*= 0*/)
 {
 	LoadPlrGFX(player, graphic);
 
@@ -2513,14 +2513,14 @@ void InitPlayer(Player &player, bool firstTime)
 		ClearStateVariables(player);
 
 		if (player._pHitPoints >> 6 > 0) {
-			player._pmode = PM_STAND;
-			NewPlrAnim(player, player_graphic::Stand, Direction::South);
+			player._pmode = PlayerMode::Stand;
+			NewPlrAnim(player, PlayerGraphic::Stand, Direction::South);
 			player.AnimInfo.currentFrame = GenerateRnd(player._pNFrames - 1);
 			player.AnimInfo.tickCounterOfCurrentFrame = GenerateRnd(3);
 		} else {
 			player._pgfxnum &= ~0xFU;
-			player._pmode = PM_DEATH;
-			NewPlrAnim(player, player_graphic::Death, Direction::South);
+			player._pmode = PlayerMode::Death;
+			NewPlrAnim(player, PlayerGraphic::Death, Direction::South);
 			player.AnimInfo.currentFrame = player.AnimInfo.numberOfFrames - 2;
 		}
 
@@ -2608,8 +2608,8 @@ void StartStand(Player &player, Direction dir)
 		return;
 	}
 
-	NewPlrAnim(player, player_graphic::Stand, dir);
-	player._pmode = PM_STAND;
+	NewPlrAnim(player, PlayerGraphic::Stand, dir);
+	player._pmode = PlayerMode::Stand;
 	FixPlayerLocation(player, dir);
 	FixPlrWalkTags(player);
 	dPlayer[player.position.tile.x][player.position.tile.y] = player.getId() + 1;
@@ -2630,9 +2630,9 @@ void StartPlrBlock(Player &player, Direction dir)
 		skippedAnimationFrames = (player._pBFrames - 2); // ISPL_FASTBLOCK means we cancel the animation if frame 2 was shown
 	}
 
-	NewPlrAnim(player, player_graphic::Block, dir, AnimationDistributionFlags::SkipsDelayOfLastFrame, skippedAnimationFrames);
+	NewPlrAnim(player, PlayerGraphic::Block, dir, AnimationDistributionFlags::SkipsDelayOfLastFrame, skippedAnimationFrames);
 
-	player._pmode = PM_BLOCK;
+	player._pmode = PlayerMode::Block;
 	FixPlayerLocation(player, dir);
 	SetPlayerOld(player);
 }
@@ -2681,9 +2681,9 @@ void StartPlrHit(Player &player, int dam, bool forcehit)
 		skippedAnimationFrames = 0;
 	}
 
-	NewPlrAnim(player, player_graphic::Hit, pd, AnimationDistributionFlags::None, skippedAnimationFrames);
+	NewPlrAnim(player, PlayerGraphic::Hit, pd, AnimationDistributionFlags::None, skippedAnimationFrames);
 
-	player._pmode = PM_GOTHIT;
+	player._pmode = PlayerMode::GotHit;
 	FixPlayerLocation(player, pd);
 	FixPlrWalkTags(player);
 	dPlayer[player.position.tile.x][player.position.tile.y] = player.getId() + 1;
@@ -2696,7 +2696,7 @@ __attribute__((no_sanitize("shift-base")))
 void
 StartPlayerKill(Player &player, DeathReason deathReason)
 {
-	if (player._pHitPoints <= 0 && player._pmode == PM_DEATH) {
+	if (player._pHitPoints <= 0 && player._pmode == PlayerMode::Death) {
 		return;
 	}
 
@@ -2723,10 +2723,10 @@ StartPlayerKill(Player &player, DeathReason deathReason)
 		SetPlrAnims(player);
 	}
 
-	NewPlrAnim(player, player_graphic::Death, player._pdir);
+	NewPlrAnim(player, PlayerGraphic::Death, player._pdir);
 
 	player._pBlockFlag = false;
-	player._pmode = PM_DEATH;
+	player._pmode = PlayerMode::Death;
 	player._pInvincible = true;
 	SetPlayerHitPoints(player, 0);
 
@@ -2929,7 +2929,7 @@ StartNewLvl(Player &player, interface_mode fom, int lvl)
 	}
 
 	if (&player == MyPlayer) {
-		player._pmode = PM_NEWLVL;
+		player._pmode = PlayerMode::NewLevel;
 		player._pInvincible = true;
 		SDL_Event event;
 		event.type = CustomEventToSdlEvent(fom);
@@ -2953,7 +2953,7 @@ void RestartTownLvl(Player &player)
 	player._pManaBase = player._pMana - (player._pMaxMana - player._pMaxManaBase);
 
 	CalcPlrInv(player, false);
-	player._pmode = PM_NEWLVL;
+	player._pmode = PlayerMode::NewLevel;
 
 	if (&player == MyPlayer) {
 		player._pInvincible = true;
@@ -2980,7 +2980,7 @@ void StartWarpLvl(Player &player, size_t pidx)
 
 	if (&player == MyPlayer) {
 		SetCurrentPortal(pidx);
-		player._pmode = PM_NEWLVL;
+		player._pmode = PlayerMode::NewLevel;
 		player._pInvincible = true;
 		SDL_Event event;
 		event.type = CustomEventToSdlEvent(WM_DIABWARPLVL);
@@ -3044,32 +3044,32 @@ void ProcessPlayers()
 			bool tplayer = false;
 			do {
 				switch (player._pmode) {
-				case PM_STAND:
-				case PM_NEWLVL:
-				case PM_QUIT:
+				case PlayerMode::Stand:
+				case PlayerMode::NewLevel:
+				case PlayerMode::Quit:
 					tplayer = false;
 					break;
-				case PM_WALK_NORTHWARDS:
-				case PM_WALK_SOUTHWARDS:
-				case PM_WALK_SIDEWAYS:
+				case PlayerMode::WalkNorth:
+				case PlayerMode::WalkSouth:
+				case PlayerMode::WalkSideways:
 					tplayer = DoWalk(player, player._pmode);
 					break;
-				case PM_ATTACK:
+				case PlayerMode::Attack:
 					tplayer = DoAttack(player);
 					break;
-				case PM_RATTACK:
+				case PlayerMode::RangedAttack:
 					tplayer = DoRangeAttack(player);
 					break;
-				case PM_BLOCK:
+				case PlayerMode::Block:
 					tplayer = DoBlock(player);
 					break;
-				case PM_SPELL:
+				case PlayerMode::Spell:
 					tplayer = DoSpell(player);
 					break;
-				case PM_GOTHIT:
+				case PlayerMode::GotHit:
 					tplayer = DoGotHit(player);
 					break;
-				case PM_DEATH:
+				case PlayerMode::Death:
 					tplayer = DoDeath(player);
 					break;
 				}
@@ -3077,7 +3077,7 @@ void ProcessPlayers()
 			} while (tplayer);
 
 			player.previewCelSprite = std::nullopt;
-			if (player._pmode != PM_DEATH || player.AnimInfo.tickCounterOfCurrentFrame != 40)
+			if (player._pmode != PlayerMode::Death || player.AnimInfo.tickCounterOfCurrentFrame != 40)
 				player.AnimInfo.processAnimation();
 		}
 	}
@@ -3245,7 +3245,7 @@ void CheckPlrSpell(bool isShiftHeld, SpellID spellID, SpellType spellType)
 
 void SyncPlrAnim(Player &player)
 {
-	const player_graphic graphic = player.getGraphic();
+	const PlayerGraphic graphic = player.getGraphic();
 	if (!HeadlessMode)
 		player.AnimInfo.sprites = player.AnimationData[static_cast<size_t>(graphic)].spritesForDirection(player._pdir);
 }

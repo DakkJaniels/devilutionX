@@ -67,27 +67,29 @@ enum class HeroClass : uint8_t {
 
 enum class CharacterAttribute : uint8_t {
 	Strength,
-	Magic,
 	Dexterity,
-	Vitality,
+	Constitution,
+	Intelligence,
+	Wisdom,
+	Charisma,
 
 	FIRST = Strength,
-	LAST = Vitality
+	LAST = Charisma
 };
 
 // Logical equipment locations
-enum inv_body_loc : uint8_t {
-	INVLOC_HEAD,
-	INVLOC_RING_LEFT,
-	INVLOC_RING_RIGHT,
-	INVLOC_AMULET,
-	INVLOC_HAND_LEFT,
-	INVLOC_HAND_RIGHT,
-	INVLOC_CHEST,
-	NUM_INVLOC,
+enum class InventoryBodyLocation : uint8_t {
+	Head,
+	RingLeft,
+	RingRight,
+	Amulet,
+	HandLeft,
+	HandRight,
+	Chest,
+	NumberOfLocations,
 };
 
-enum class player_graphic : uint8_t {
+enum class PlayerGraphic : uint8_t {
 	Stand,
 	Walk,
 	Attack,
@@ -113,19 +115,19 @@ enum class PlayerWeaponGraphic : uint8_t {
 	Staff,
 };
 
-enum PLR_MODE : uint8_t {
-	PM_STAND,
-	PM_WALK_NORTHWARDS,
-	PM_WALK_SOUTHWARDS,
-	PM_WALK_SIDEWAYS,
-	PM_ATTACK,
-	PM_RATTACK,
-	PM_BLOCK,
-	PM_GOTHIT,
-	PM_DEATH,
-	PM_SPELL,
-	PM_NEWLVL,
-	PM_QUIT,
+enum class PlayerMode : uint8_t {
+	Stand,
+	WalkNorth,
+	WalkSouth,
+	WalkSideways,
+	Attack,
+	RangedAttack,
+	Block,
+	GotHit,
+	Death,
+	Spell,
+	NewLevel,
+	Quit,
 };
 
 enum action_id : int8_t {
@@ -202,7 +204,7 @@ constexpr std::array<char, 6> CharChar = {
 };
 
 /**
- * @brief Contains Data (CelSprites) for a player graphic (player_graphic)
+ * @brief Contains Data (CelSprites) for a player graphic (PlayerGraphic)
  */
 struct PlayerAnimationData {
 	/**
@@ -225,13 +227,56 @@ struct SpellCastInfo {
 	int spellLevel;
 };
 
+struct PlayerAttributes {
+	int Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma;
+};
+
+class Player {
+	Player() = default;
+
+	const char MaxNameLength = 32;
+
+
+
+
+
+
+};
+
+class PlayerClass {
+private:
+	void GetClassBonuses(std::string classType)
+	{
+
+
+
+	}
+
+	int HitPointsPerLevel,
+	    ManaPointsPerLevel,
+	    StartingHitPoints,
+	    StartingManaPoints;
+	PlayerAttributes BonusStats;
+
+	public:
+		PlayerClass(std::string classType)
+		{
+
+		}
+
+
+
+
+};
+
+
 struct Player {
 	Player() = default;
 	Player(Player &&) noexcept = default;
 	Player &operator=(Player &&) noexcept = default;
 
 	char _pName[PlayerNameLength];
-	Item InvBody[NUM_INVLOC];
+	Item InvBody[static_cast<int>(InventoryBodyLocation::NumberOfLocations)];
 	Item InvList[InventoryGridCells];
 	Item SpdList[MaxBeltItems];
 	Item HoldItem;
@@ -239,14 +284,9 @@ struct Player {
 	int lightId;
 
 	int _pNumInv;
-	int _pStrength;
-	int _pBaseStr;
-	int _pMagic;
-	int _pBaseMag;
-	int _pDexterity;
-	int _pBaseDex;
-	int _pVitality;
-	int _pBaseVit;
+	PlayerAttributes BaseStats, ModifiedStats;
+
+
 	int _pStatPts;
 	int _pDamageMod;
 	int _pBaseToBlk;
@@ -275,7 +315,7 @@ struct Player {
 	int _pILMaxDam;
 	uint32_t _pExperience;
 	uint32_t _pNextExper;
-	PLR_MODE _pmode;
+	PlayerMode _pmode;
 	int8_t walkpath[MaxPathLength];
 	bool plractive;
 	action_id destAction;
@@ -302,7 +342,7 @@ struct Player {
 	/**
 	 * @brief Contains Data (Sprites) for the different Animations
 	 */
-	std::array<PlayerAnimationData, enum_size<player_graphic>::value> AnimationData;
+	std::array<PlayerAnimationData, enum_size<PlayerGraphic>::value> AnimationData;
 	int8_t _pNFrames;
 	int8_t _pWFrames;
 	int8_t _pAFrames;
@@ -381,9 +421,9 @@ struct Player {
 
 	bool CanUseItem(const Item &item) const
 	{
-		return _pStrength >= item._iMinStr
-		    && _pMagic >= item._iMinMag
-		    && _pDexterity >= item._iMinDex;
+		return ModifiedStats.Strength >= item._iMinStr
+		    && ModifiedStats.Intelligence >= item._iMinMag
+		    && ModifiedStats.Dexterity >= item._iMinDex;
 	}
 
 	/**
@@ -424,7 +464,7 @@ struct Player {
 		};
 
 		const Item *mostValuableItem = getMostValuableItem(SpdList, SpdList + MaxBeltItems);
-		mostValuableItem = getMostValuableItem(InvBody, InvBody + inv_body_loc::NUM_INVLOC, mostValuableItem);
+		mostValuableItem = getMostValuableItem(InvBody, InvBody + inv_body_loc::InventoryBodyLocation::NumberOfLocations, mostValuableItem);
 		mostValuableItem = getMostValuableItem(InvList, InvList + _pNumInv, mostValuableItem);
 
 		return mostValuableItem;
@@ -711,24 +751,24 @@ struct Player {
 
 	bool CanChangeAction()
 	{
-		if (_pmode == PM_STAND)
+		if (_pmode == PlayerMode::Stand)
 			return true;
-		if (_pmode == PM_ATTACK && AnimInfo.currentFrame >= _pAFNum)
+		if (_pmode == PlayerMode::Attack && AnimInfo.currentFrame >= _pAFNum)
 			return true;
-		if (_pmode == PM_RATTACK && AnimInfo.currentFrame >= _pAFNum)
+		if (_pmode == PlayerMode::RangedAttack && AnimInfo.currentFrame >= _pAFNum)
 			return true;
-		if (_pmode == PM_SPELL && AnimInfo.currentFrame >= _pSFNum)
+		if (_pmode == PlayerMode::Spell && AnimInfo.currentFrame >= _pSFNum)
 			return true;
 		if (isWalking() && AnimInfo.isLastFrame())
 			return true;
 		return false;
 	}
 
-	[[nodiscard]] player_graphic getGraphic() const;
+	[[nodiscard]] PlayerGraphic getGraphic() const;
 
 	[[nodiscard]] uint16_t getSpriteWidth() const;
 
-	void getAnimationFramesAndTicksPerFrame(player_graphic graphics, int8_t &numberOfFrames, int8_t &ticksPerFrame) const;
+	void getAnimationFramesAndTicksPerFrame(PlayerGraphic graphics, int8_t &numberOfFrames, int8_t &ticksPerFrame) const;
 
 	/**
 	 * @brief Updates previewCelSprite according to new requested command
@@ -794,7 +834,7 @@ extern bool MyPlayerIsDead;
 
 Player *PlayerAtPosition(Point position);
 
-void LoadPlrGFX(Player &player, player_graphic graphic);
+void LoadPlrGFX(Player &player, PlayerGraphic graphic);
 void InitPlayerGFX(Player &player);
 void ResetPlayerGFX(Player &player);
 
@@ -809,7 +849,7 @@ void ResetPlayerGFX(Player &player);
  * @param numSkippedFrames Number of Frames that will be skipped (for example with modifier "faster attack")
  * @param distributeFramesBeforeFrame Distribute the numSkippedFrames only before this frame
  */
-void NewPlrAnim(Player &player, player_graphic graphic, Direction dir, AnimationDistributionFlags flags = AnimationDistributionFlags::None, int8_t numSkippedFrames = 0, int8_t distributeFramesBeforeFrame = 0);
+void NewPlrAnim(Player &player, PlayerGraphic graphic, Direction dir, AnimationDistributionFlags flags = AnimationDistributionFlags::None, int8_t numSkippedFrames = 0, int8_t distributeFramesBeforeFrame = 0);
 void SetPlrAnims(Player &player);
 void CreatePlayer(Player &player, HeroClass c);
 int CalcStatDiff(Player &player);

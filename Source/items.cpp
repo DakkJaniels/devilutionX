@@ -2854,7 +2854,7 @@ void CalcPlrItemVals(Player &player, bool loadgfx)
 		ResetPlayerGFX(player);
 		SetPlrAnims(player);
 		player.previewCelSprite = std::nullopt;
-		player_graphic graphic = player.getGraphic();
+		PlayerGraphic graphic = player.getGraphic();
 		int8_t numberOfFrames;
 		int8_t ticksPerFrame;
 		player.getAnimationFramesAndTicksPerFrame(graphic, numberOfFrames, ticksPerFrame);
@@ -3648,8 +3648,8 @@ void CheckIdentify(Player &player, int cii)
 {
 	Item *pi;
 
-	if (cii >= NUM_INVLOC)
-		pi = &player.InvList[cii - NUM_INVLOC];
+	if (cii >= InventoryBodyLocation::NumberOfLocations)
+		pi = &player.InvList[cii - InventoryBodyLocation::NumberOfLocations];
 	else
 		pi = &player.InvBody[cii];
 
@@ -3663,8 +3663,8 @@ void DoRepair(Player &player, int cii)
 
 	PlaySfxLoc(IS_REPAIR, player.position.tile);
 
-	if (cii >= NUM_INVLOC) {
-		pi = &player.InvList[cii - NUM_INVLOC];
+	if (cii >= InventoryBodyLocation::NumberOfLocations) {
+		pi = &player.InvList[cii - InventoryBodyLocation::NumberOfLocations];
 	} else {
 		pi = &player.InvBody[cii];
 	}
@@ -3677,8 +3677,8 @@ void DoRecharge(Player &player, int cii)
 {
 	Item *pi;
 
-	if (cii >= NUM_INVLOC) {
-		pi = &player.InvList[cii - NUM_INVLOC];
+	if (cii >= InventoryBodyLocation::NumberOfLocations) {
+		pi = &player.InvList[cii - InventoryBodyLocation::NumberOfLocations];
 	} else {
 		pi = &player.InvBody[cii];
 	}
@@ -3690,8 +3690,8 @@ void DoRecharge(Player &player, int cii)
 bool DoOil(Player &player, int cii)
 {
 	Item *pi;
-	if (cii >= NUM_INVLOC) {
-		pi = &player.InvList[cii - NUM_INVLOC];
+	if (cii >= InventoryBodyLocation::NumberOfLocations) {
+		pi = &player.InvList[cii - InventoryBodyLocation::NumberOfLocations];
 	} else {
 		pi = &player.InvBody[cii];
 	}
@@ -4350,12 +4350,6 @@ void SpawnBoy(int lvl)
 	Player &myPlayer = *MyPlayer;
 
 	HeroClass pc = myPlayer._pClass;
-	int strength = std::max(myPlayer.GetMaximumAttributeValue(CharacterAttribute::Strength), myPlayer._pStrength);
-	int dexterity = std::max(myPlayer.GetMaximumAttributeValue(CharacterAttribute::Dexterity), myPlayer._pDexterity);
-	int magic = std::max(myPlayer.GetMaximumAttributeValue(CharacterAttribute::Magic), myPlayer._pMagic);
-	strength += strength / 5;
-	dexterity += dexterity / 5;
-	magic += magic / 5;
 
 	if (boylevel >= (lvl / 2) && !boyitem.isEmpty())
 		return;
@@ -4376,80 +4370,8 @@ void SpawnBoy(int lvl)
 			break;
 		}
 
-		ivalue = 0;
-
-		ItemType itemType = boyitem._itype;
-
-		switch (itemType) {
-		case ItemType::LightArmor:
-		case ItemType::MediumArmor:
-		case ItemType::HeavyArmor: {
-			const auto *const mostValuablePlayerArmor = myPlayer.GetMostValuableItem(
-			    [](const Item &item) {
-				    return IsAnyOf(item._itype, ItemType::LightArmor, ItemType::MediumArmor, ItemType::HeavyArmor);
-			    });
-
-			ivalue = mostValuablePlayerArmor == nullptr ? 0 : mostValuablePlayerArmor->_iIvalue;
-			break;
-		}
-		case ItemType::Shield:
-		case ItemType::Axe:
-		case ItemType::Bow:
-		case ItemType::Mace:
-		case ItemType::Sword:
-		case ItemType::Helm:
-		case ItemType::Staff:
-		case ItemType::Ring:
-		case ItemType::Amulet: {
-			const auto *const mostValuablePlayerItem = myPlayer.GetMostValuableItem(
-			    [itemType](const Item &item) { return item._itype == itemType; });
-
-			ivalue = mostValuablePlayerItem == nullptr ? 0 : mostValuablePlayerItem->_iIvalue;
-			break;
-		}
-		default:
-			app_fatal("Invalid item spawn");
-		}
-		ivalue = ivalue * 4 / 5; // avoids forced int > float > int conversion
-
-		count++;
-
-		if (count < 200) {
-			switch (pc) {
-			case HeroClass::Warrior:
-				if (IsAnyOf(itemType, ItemType::Bow, ItemType::Staff))
-					ivalue = INT_MAX;
-				break;
-			case HeroClass::Rogue:
-				if (IsAnyOf(itemType, ItemType::Sword, ItemType::Staff, ItemType::Axe, ItemType::Mace, ItemType::Shield))
-					ivalue = INT_MAX;
-				break;
-			case HeroClass::Sorcerer:
-				if (IsAnyOf(itemType, ItemType::Staff, ItemType::Axe, ItemType::Bow, ItemType::Mace))
-					ivalue = INT_MAX;
-				break;
-			case HeroClass::Monk:
-				if (IsAnyOf(itemType, ItemType::Bow, ItemType::MediumArmor, ItemType::Shield, ItemType::Mace))
-					ivalue = INT_MAX;
-				break;
-			case HeroClass::Bard:
-				if (IsAnyOf(itemType, ItemType::Axe, ItemType::Mace, ItemType::Staff))
-					ivalue = INT_MAX;
-				break;
-			case HeroClass::Barbarian:
-				if (IsAnyOf(itemType, ItemType::Bow, ItemType::Staff))
-					ivalue = INT_MAX;
-				break;
-			}
-		}
-	} while (keepgoing
-	    || ((
-	            boyitem._iIvalue > 200000
-	            || boyitem._iMinStr > strength
-	            || boyitem._iMinMag > magic
-	            || boyitem._iMinDex > dexterity
-	            || boyitem._iIvalue < ivalue)
-	        && count < 250));
+		
+	} while (keepgoing || ((boyitem._iIvalue > 200000 && count < 250)));
 	boyitem._iCreateInfo = lvl | CF_BOY;
 	boyitem._iIdentified = true;
 	boylevel = lvl / 2;

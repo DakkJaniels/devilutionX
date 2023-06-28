@@ -585,7 +585,7 @@ void SearchAutomapItem(const Surface &out, const Displacement &myPlayerOffset, i
 {
 	const Player &player = *MyPlayer;
 	Point tile = player.position.tile;
-	if (player._pmode == PM_WALK_SIDEWAYS) {
+	if (player._pmode == PlayerMode::WalkSideways) {
 		tile = player.position.future;
 		if (player._pdir == Direction::West)
 			tile.x++;
@@ -633,7 +633,7 @@ void DrawAutomapPlr(const Surface &out, const Displacement &myPlayerOffset, int 
 
 	Player &player = Players[playerId];
 	Point tile = player.position.tile;
-	if (player._pmode == PM_WALK_SIDEWAYS) {
+	if (player._pmode == PlayerMode::WalkSideways) {
 		tile = player.position.future;
 	}
 

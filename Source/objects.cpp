@@ -1747,7 +1747,7 @@ void UpdateBurningCrossDamage(Object &cross)
 
 	Player &myPlayer = *MyPlayer;
 
-	if (myPlayer._pmode == PM_DEATH)
+	if (myPlayer._pmode == PlayerMode::Death)
 		return;
 
 	int8_t fireResist = myPlayer._pFireResist;
@@ -2408,7 +2408,7 @@ void OperateShrineHidden(Player &player)
 			}
 			if (cnt == 0)
 				break;
-			int r = GenerateRnd(NUM_INVLOC);
+			int r = GenerateRnd(InventoryBodyLocation::NumberOfLocations);
 			if (player.InvBody[r].isEmpty() || player.InvBody[r]._iMaxDur == DUR_INDESTRUCTIBLE || player.InvBody[r]._iMaxDur == 0)
 				continue;
 

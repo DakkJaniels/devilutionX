@@ -19,7 +19,7 @@ int RunBlockTest(int frames, ItemSpecialEffect flags)
 	int i = 1;
 	for (; i < 100; i++) {
 		TestPlayerDoGotHit(player);
-		if (player._pmode != PM_GOTHIT)
+		if (player._pmode != PlayerMode::GotHit)
 			break;
 		player.AnimInfo.currentFrame++;
 	}
@@ -88,7 +88,7 @@ static void AssertPlayer(Player &player)
 {
 	ASSERT_EQ(CountU8(player._pSplLvl, 64), 0);
 	ASSERT_EQ(Count8(player.InvGrid, InventoryGridCells), 1);
-	ASSERT_EQ(CountItems(player.InvBody, NUM_INVLOC), 1);
+	ASSERT_EQ(CountItems(player.InvBody, InventoryBodyLocation::NumberOfLocations), 1);
 	ASSERT_EQ(CountItems(player.InvList, InventoryGridCells), 1);
 	ASSERT_EQ(CountItems(player.SpdList, MaxBeltItems), 2);
 	ASSERT_EQ(CountItems(&player.HoldItem, 1), 0);

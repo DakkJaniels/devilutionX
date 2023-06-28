@@ -134,7 +134,7 @@ void SyncPlrInv(TSyncHeader *pHdr)
 	}
 
 	pHdr->bPInvLoc = -1;
-	assert(sgnSyncPInv > -1 && sgnSyncPInv < NUM_INVLOC);
+	assert(sgnSyncPInv > -1 && sgnSyncPInv < InventoryBodyLocation::NumberOfLocations);
 	const auto &item = MyPlayer->InvBody[sgnSyncPInv];
 	if (!item.isEmpty()) {
 		pHdr->bPInvLoc = sgnSyncPInv;
@@ -145,7 +145,7 @@ void SyncPlrInv(TSyncHeader *pHdr)
 	}
 
 	sgnSyncPInv++;
-	if (sgnSyncPInv >= NUM_INVLOC) {
+	if (sgnSyncPInv >= InventoryBodyLocation::NumberOfLocations) {
 		sgnSyncPInv = 0;
 	}
 }

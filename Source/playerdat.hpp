@@ -18,7 +18,7 @@ struct PlayerData {
 	/* Class Directory Path */
 	const char *classPath;
 	/* Class Starting Strength Stat */
-	uint8_t baseStr;
+	uint8_t bonusStr;
 	/* Class Starting Magic Stat */
 	uint8_t baseMag;
 	/* Class Starting Dexterity Stat */

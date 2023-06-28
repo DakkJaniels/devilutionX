@@ -228,7 +228,7 @@ bool CanWield(Player &player, const Item &item)
  */
 bool CanEquip(Player &player, const Item &item, inv_body_loc bodyLocation)
 {
-	if (!CanEquip(item) || player._pmode > PM_WALK_SIDEWAYS || !player.InvBody[bodyLocation].isEmpty()) {
+	if (!CanEquip(item) || player._pmode > PlayerMode::WalkSideways || !player.InvBody[bodyLocation].isEmpty()) {
 		return false;
 	}
 
@@ -392,7 +392,7 @@ void CheckInvPaste(Player &player, Point cursorPosition)
 		return;
 	}
 
-	if (player._pmode > PM_WALK_SIDEWAYS && IsNoneOf(il, ILOC_UNEQUIPABLE, ILOC_BELT))
+	if (player._pmode > PlayerMode::WalkSideways && IsNoneOf(il, ILOC_UNEQUIPABLE, ILOC_BELT))
 		return;
 
 	if (&player == MyPlayer)
@@ -562,7 +562,7 @@ void CheckInvPaste(Player &player, Point cursorPosition)
 
 void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool dropItem)
 {
-	if (player._pmode > PM_WALK_SIDEWAYS) {
+	if (player._pmode > PlayerMode::WalkSideways) {
 		return;
 	}
 
@@ -706,7 +706,7 @@ void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool 
 					 * First identify the correct InvBody slot and store it in invloc.
 					 */
 					automaticallyUnequip = true; // Switch to say "I have no room when inventory is too full"
-					int invloc = NUM_INVLOC;
+					int invloc = InventoryBodyLocation::NumberOfLocations;
 					switch (player.GetItemLocation(holdItem)) {
 					case ILOC_ARMOR:
 						invloc = INVLOC_CHEST;
@@ -759,7 +759,7 @@ void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool 
 						break;
 					}
 					// Empty the identified InvBody slot (invloc) and hand over to AutoEquip
-					if (invloc != NUM_INVLOC) {
+					if (invloc != InventoryBodyLocation::NumberOfLocations) {
 						holdItem = player.InvBody[invloc];
 						if (player.InvBody[invloc]._itype != ItemType::None) {
 							if (AutoPlaceItemInInventory(player, holdItem, true)) {
@@ -1093,7 +1093,7 @@ void DrawInv(const Surface &out)
 
 	Player &myPlayer = *InspectPlayer;
 
-	for (int slot = INVLOC_HEAD; slot < NUM_INVLOC; slot++) {
+	for (int slot = INVLOC_HEAD; slot < InventoryBodyLocation::NumberOfLocations; slot++) {
 		if (!myPlayer.InvBody[slot].isEmpty()) {
 			int screenX = slotPos[slot].x;
 			int screenY = slotPos[slot].y;
@@ -1235,7 +1235,7 @@ bool AutoEquip(Player &player, const Item &item, bool persistItem)
 		return false;
 	}
 
-	for (int bodyLocation = INVLOC_HEAD; bodyLocation < NUM_INVLOC; bodyLocation++) {
+	for (int bodyLocation = INVLOC_HEAD; bodyLocation < InventoryBodyLocation::NumberOfLocations; bodyLocation++) {
 		if (AutoEquip(player, item, (inv_body_loc)bodyLocation, persistItem)) {
 			return true;
 		}
@@ -1447,7 +1447,7 @@ void inv_update_rem_item(Player &player, inv_body_loc iv)
 {
 	player.InvBody[iv].clear();
 
-	CalcPlrInv(player, player._pmode != PM_DEATH);
+	CalcPlrInv(player, player._pmode != PlayerMode::Death);
 }
 
 void CheckInvSwap(Player &player, const Item &item, int invGridIndex)

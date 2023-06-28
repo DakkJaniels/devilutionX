@@ -789,7 +789,7 @@ bool IOwnLevel(const Player &player)
 			continue;
 		if (other._pLvlChanging)
 			continue;
-		if (other._pmode == PM_NEWLVL)
+		if (other._pmode == PlayerMode::NewLevel)
 			continue;
 		if (other.plrlevel != player.plrlevel)
 			continue;
@@ -1840,7 +1840,7 @@ size_t OnChangePlayerItems(const TCmd *pCmd, size_t pnum)
 	const auto &message = *reinterpret_cast<const TCmdChItem *>(pCmd);
 	Player &player = Players[pnum];
 
-	if (message.bLoc >= NUM_INVLOC)
+	if (message.bLoc >= InventoryBodyLocation::NumberOfLocations)
 		return sizeof(message);
 
 	auto bodyLocation = static_cast<inv_body_loc>(message.bLoc);
@@ -1865,7 +1865,7 @@ size_t OnDeletePlayerItems(const TCmd *pCmd, size_t pnum)
 
 	if (gbBufferMsgs != 1) {
 		Player &player = Players[pnum];
-		if (&player != MyPlayer && message.bLoc < NUM_INVLOC)
+		if (&player != MyPlayer && message.bLoc < InventoryBodyLocation::NumberOfLocations)
 			inv_update_rem_item(player, static_cast<inv_body_loc>(message.bLoc));
 	} else {
 		SendPacket(pnum, &message, sizeof(message));
@@ -2042,8 +2042,8 @@ size_t OnPlayerJoinLevel(const TCmd *pCmd, size_t pnum)
 				StartStand(player, Direction::South);
 			} else {
 				player._pgfxnum &= ~0xFU;
-				player._pmode = PM_DEATH;
-				NewPlrAnim(player, player_graphic::Death, Direction::South);
+				player._pmode = PlayerMode::Death;
+				NewPlrAnim(player, PlayerGraphic::Death, Direction::South);
 				player.AnimInfo.currentFrame = player.AnimInfo.numberOfFrames - 2;
 				dFlags[player.position.tile.x][player.position.tile.y] |= DungeonFlag::DeadPlayer;
 			}
