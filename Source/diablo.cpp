@@ -5,6 +5,7 @@
  */
 #include <array>
 #include <cstdint>
+#include <fstream>
 
 #include <fmt/format.h>
 
@@ -78,6 +79,7 @@
 #include "track.h"
 #include "utils/console.h"
 #include "utils/display.h"
+#include "utils/file_util.h"
 #include "utils/language.h"
 #include "utils/paths.h"
 #include "utils/stdcompat/string_view.hpp"
@@ -2400,6 +2402,20 @@ int DiabloMain(int argc, char **argv)
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_DEBUG);
 #endif
 
+	std::ifstream testtsv;
+	testtsv.open("C:\\src\\test.tsv", std::ifstream::in);
+
+	std::vector<std::map<std::string, std::string>> data;
+	ParseTSVFile(testtsv, data);
+
+	for (const auto &row : data) {
+		for (const auto &element : row) {
+		SDL_Log("Key: %s Value: %s", element.first, element.second);
+		}
+		SDL_Log("---------------------");
+		
+	}
+	return 0;
 	DiabloParseFlags(argc, argv);
 	InitKeymapActions();
 	InitPadmapActions();

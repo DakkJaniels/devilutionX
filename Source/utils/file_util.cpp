@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -419,6 +420,44 @@ FILE *OpenFile(const char *path, const char *mode)
 #else
 	return std::fopen(path, mode);
 #endif
+}
+
+void ParseTSVFile(std::istream &file, std::vector<std::map<std::string, std::string>> &data)
+{
+	std::string line, header;
+
+	// Ensure the data vector is empty
+	data.clear();
+
+	// Vector to hold our headers
+	std::vector<std::string> headers;
+
+	// Read the header line
+	if (std::getline(file, line)) {
+		std::istringstream iss(line);
+
+		while (std::getline(iss, header, '\t')) {
+			headers.push_back(header);
+		}
+	}
+
+	// Read the rest of the data
+	while (std::getline(file, line)) {
+		std::istringstream iss(line);
+		std::map<std::string, std::string> row;
+		std::string value;
+		int i = 0;
+
+		while (std::getline(iss, value, '\t')) {
+			if (i < headers.size()) {
+				row[headers[i]] = value;
+				i++;
+			}
+		}
+
+		// Push this row onto our data
+		data.push_back(row);
+	}
 }
 
 } // namespace devilution
