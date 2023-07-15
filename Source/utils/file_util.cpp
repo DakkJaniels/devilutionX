@@ -10,6 +10,7 @@
 
 #include <SDL.h>
 
+#include "utils/endian_stream.hpp"
 #include "utils/log.hpp"
 #include "utils/stdcompat/filesystem.hpp"
 #include "utils/stdcompat/string_view.hpp"
@@ -419,6 +420,47 @@ FILE *OpenFile(const char *path, const char *mode)
 #else
 	return std::fopen(path, mode);
 #endif
+}
+
+bool GetTSVLine(FILE *file, std::vector<std::string> &line)
+{
+	std::string cell = "";
+	line.clear();
+	uint8_t buf = ReadByte(file);
+	if (feof(file)) // EOF
+		return false;
+	while (buf != '\n') {
+		if (buf != '\r') { // used to skip carriage returns
+			if (buf == '\t') {
+				line.push_back(cell.c_str());
+				cell.clear();
+			} else {
+				cell += buf;
+			}
+		}
+		buf = ReadByte(file);
+	}
+	line.push_back(cell.c_str());
+	return true;
+}
+
+void ParseTSVFile(FILE *file, std::vector<std::vector<std::string>> &data, bool keepHeaders /*= false*/)
+{
+	// Ensure the data vector is empty
+	data.clear();
+
+	// Vector to hold our headers
+	std::vector<std::string> headers, line;
+
+	// Read the header line
+	if (GetTSVLine(file, headers) && keepHeaders) {
+		data.push_back(headers);
+	}
+
+	// Read the rest of the data
+	while (GetTSVLine(file, line)) {
+		data.push_back(line);
+	}
 }
 
 } // namespace devilution

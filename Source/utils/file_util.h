@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "utils/stdcompat/string_view.hpp"
 
@@ -42,6 +43,7 @@ void RenameFile(const char *from, const char *to);
 void CopyFileOverwrite(const char *from, const char *to);
 void RemoveFile(const char *path);
 FILE *OpenFile(const char *path, const char *mode);
+void ParseTSVFile(FILE *file, std::vector<std::vector<std::string>> &data, bool keepHeaders = false);
 
 #if (defined(_WIN64) || defined(_WIN32)) && !defined(NXDK)
 std::unique_ptr<wchar_t[]> ToWideChar(string_view path);
