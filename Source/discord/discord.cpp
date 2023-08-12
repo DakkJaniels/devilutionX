@@ -43,7 +43,7 @@ struct PlayerData {
 	dungeon_type dungeonArea;
 	_setlevels questMap;
 	Uint8 dungeonLevel;
-	Sint8 playerLevel;
+	Uint8 playerLevel;
 	int playerGfx;
 
 	// Why??? This is POD
@@ -137,7 +137,7 @@ void UpdateGame()
 		return;
 
 	auto newData = PlayerData {
-		leveltype, setlvlnum, currlevel, MyPlayer->_pLevel, MyPlayer->_pgfxnum
+		leveltype, setlvlnum, currlevel, MyPlayer->getCharacterLevel(), MyPlayer->_pgfxnum
 	};
 	if (newData != tracked_data) {
 		tracked_data = newData;
