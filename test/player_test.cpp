@@ -109,7 +109,7 @@ static void AssertPlayer(Player &player)
 	ASSERT_EQ(player._pDexterity, 30);
 	ASSERT_EQ(player._pBaseVit, 20);
 	ASSERT_EQ(player._pVitality, 20);
-	ASSERT_EQ(player._pLevel, 1);
+	ASSERT_EQ(player.getCharacterLevel(), 1);
 	ASSERT_EQ(player._pStatPts, 0);
 	ASSERT_EQ(player._pExperience, 0);
 	ASSERT_EQ(player._pGold, 100);
@@ -148,7 +148,7 @@ static void AssertPlayer(Player &player)
 	ASSERT_EQ(player._pMaxHP, 2880);
 	ASSERT_EQ(player._pMana, 1440);
 	ASSERT_EQ(player._pMaxMana, 1440);
-	ASSERT_EQ(player._pNextExper, 2000);
+	ASSERT_EQ(player.getNextExperienceThreshold(), 2000);
 	ASSERT_EQ(player._pMagResist, 0);
 	ASSERT_EQ(player._pFireResist, 0);
 	ASSERT_EQ(player._pLghtResist, 0);

@@ -32,7 +32,6 @@ namespace devilution {
 constexpr int InventoryGridCells = 40;
 constexpr int MaxBeltItems = 8;
 constexpr int MaxResistance = 75;
-constexpr int MaxCharacterLevel = 50;
 constexpr uint8_t MaxSpellLevel = 15;
 constexpr int PlayerNameLength = 32;
 
@@ -314,7 +313,6 @@ struct Player {
 	int _pILMinDam;
 	int _pILMaxDam;
 	uint32_t _pExperience;
-	uint32_t _pNextExper;
 	PlayerMode _pmode;
 	int8_t walkpath[MaxPathLength];
 	bool plractive;
@@ -359,8 +357,11 @@ struct Player {
 	ActorPosition position;
 	Direction _pdir; // Direction faced by player (direction enum)
 	HeroClass _pClass;
-	int8_t _pLevel;
-	int8_t _pMaxLvl;
+
+private:
+	uint8_t _pLevel; // Use get/setCharacterLevel to ensure this attribute stays within the accepted range
+
+public:
 	uint8_t _pgfxnum; // Bitmask indicating what variant of the sprite the player is using. The 3 lower bits define weapon (PlayerWeaponGraphic) and the higher bits define armour (starting with PlayerArmorGraphic)
 	int8_t _pISplLvlAdd;
 	/** @brief Specifies whether players are in non-PvP mode. */
@@ -552,7 +553,7 @@ struct Player {
 	 */
 	int GetMeleeToHit() const
 	{
-		int hper = _pLevel + _pDexterity / 2 + _pIBonusToHit + BaseHitChance;
+		int hper = getCharacterLevel() + _pDexterity / 2 + _pIBonusToHit + BaseHitChance;
 		if (_pClass == HeroClass::Warrior)
 			hper += 20;
 		return hper;
@@ -575,7 +576,7 @@ struct Player {
 	 */
 	int GetRangedToHit() const
 	{
-		int hper = _pLevel + _pDexterity + _pIBonusToHit + BaseHitChance;
+		int hper = getCharacterLevel() + _pDexterity + _pIBonusToHit + BaseHitChance;
 		if (_pClass == HeroClass::Rogue)
 			hper += 20;
 		else if (_pClass == HeroClass::Warrior || _pClass == HeroClass::Bard)
@@ -613,7 +614,7 @@ struct Player {
 	{
 		int blkper = _pDexterity + _pBaseToBlk;
 		if (useLevel)
-			blkper += _pLevel * 2;
+			blkper += getCharacterLevel() * 2;
 		return blkper;
 	}
 
@@ -779,6 +780,53 @@ struct Player {
 	 */
 	void UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1, uint16_t wParam2);
 
+	[[nodiscard]] uint8_t getCharacterLevel() const
+	{
+		return _pLevel;
+	}
+
+	/**
+	 * @brief Sets the character level and derived attributes
+	 *
+	 * This method ensures the level is within the allowed range and sets the number of experience points
+	 * required for the next character level as needed.
+	 * @param level New character level
+	 */
+	void setCharacterLevel(uint8_t level);
+
+	[[nodiscard]] uint8_t getMaxCharacterLevel() const;
+
+	[[nodiscard]] bool isMaxCharacterLevel() const
+	{
+		return getCharacterLevel() == getMaxCharacterLevel();
+	}
+
+private:
+	void _addExperience(uint32_t experience, int levelDelta);
+
+public:
+	/**
+	 * @brief Adds experience to the local player based on the current game mode
+	 * @param experience base value to add, this will be adjusted to prevent power leveling in multiplayer games
+	 */
+	void addExperience(uint32_t experience)
+	{
+		_addExperience(experience, 0);
+	}
+
+	/**
+	 * @brief Adds experience to the local player based on the difference between the monster level
+	 * and current level, then also applying the power level cap in multiplayer games.
+	 * @param experience base value to add, will be scaled up/down by the difference between player and monster level
+	 * @param monsterLevel level of the monster that has rewarded this experience
+	 */
+	void addExperience(uint32_t experience, int monsterLevel)
+	{
+		_addExperience(experience, monsterLevel - getCharacterLevel());
+	}
+
+	[[nodiscard]] uint32_t getNextExperienceThreshold() const;
+
 	/** @brief Checks if the player is on the same level as the local player (MyPlayer). */
 	bool isOnActiveLevel() const
 	{
@@ -856,8 +904,7 @@ int CalcStatDiff(Player &player);
 #ifdef _DEBUG
 void NextPlrLevel(Player &player);
 #endif
-void AddPlrExperience(Player &player, int lvl, int exp);
-void AddPlrMonstExper(int lvl, int exp, char pmask);
+void AddPlrMonstExper(int lvl, unsigned int exp, char pmask);
 void ApplyPlrDamage(DamageType damageType, Player &player, int dam, int minHP = 0, int frac = 0, DeathReason deathReason = DeathReason::MonsterOrTrap);
 void InitPlayer(Player &player, bool FirstTime);
 void InitMultiView();
